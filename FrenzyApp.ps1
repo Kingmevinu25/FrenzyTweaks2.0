@@ -807,6 +807,7 @@ function Log([string]$m, [string]$lvl = 'INFO') {
     if ($script:LogBox) {
         $script:LogBox.AppendText($line + "`r`n")
     }
+    if ($lvl -in @('ERROR','WARN','SUCCESS') -and $script:Toast) { try { Show-FrenzyToast $m $lvl } catch {} }
     # Persistent, non-blocking activity notice; no extra Windows Forms timer.
     if ($script:ActivityNotice -and -not $script:ActivityNotice.IsDisposed) {
         try {
@@ -1169,7 +1170,20 @@ function Read-FnIni {
     $l.AddRange([string[]][IO.File]::ReadAllLines($script:FnCfg))
     return , $l
 }
-function Write-FnIni($lines) { [IO.File]::WriteAllLines($script:FnCfg, $lines, (New-Object Text.UTF8Encoding($false))); Save-State }
+function Write-FnIni($lines) {
+    if (-not (Test-Path -LiteralPath $script:FnCfg -PathType Leaf)) { throw 'Fortnite INI not found; no changes applied.' }
+    if (Get-Process -Name 'FortniteClient-Win64-Shipping' -ErrorAction SilentlyContinue) { throw 'Close Fortnite before applying changes.' }
+    $backup = '{0}.frenzy-{1}.bak' -f $script:FnCfg, (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
+    Copy-Item -LiteralPath $script:FnCfg -Destination $backup -ErrorAction Stop
+    try {
+        [IO.File]::WriteAllLines($script:FnCfg, [string[]]$lines, (New-Object Text.UTF8Encoding($false)))
+        Save-State
+        Log "Fortnite INI updated. Backup: $backup" 'SUCCESS'
+    } catch {
+        try { Copy-Item -LiteralPath $backup -Destination $script:FnCfg -Force -ErrorAction Stop } catch {}
+        throw
+    }
+}
 
 # ---------- Tweak registry ----------
 function Add-Tweak {
@@ -2973,6 +2987,33 @@ function Build-Gpu {
     return (Build-TweakPage 'GPU' 'GPU' 'Sensors, power limit, PCIe power saving, scheduling and manual Fortnite profile import guidance.' $pre $post)
 }
 
+# ---------- Read-only input diagnostics ----------
+function Build-InputDiagnostics {
+    $pre = { param($flow)
+        $ac = $script:PageClr.INPUT
+        $flow.Controls.Add((New-Section 'MOUSE & INPUT DIAGNOSTICS' $ac))
+        $card = New-Card 900 160 'full' $ac
+        $status = New-Lbl 'Click SCAN to inspect pointer settings.' 22 45 820 75 $script:Fnt.Small $script:Clr.Dim
+        $card.Controls.Add((New-Lbl 'WINDOWS MOUSE SETTINGS (READ-ONLY)' 22 12 620 24 $script:Fnt.Row $script:Clr.Text))
+        $card.Controls.Add($status)
+        $btn = New-Btn 'SCAN INPUT SETTINGS' 205 32 $true $ac 'search'
+        $btn.Location = New-Object Drawing.Point(660, 10)
+        $btn.Add_Click({
+            try {
+                $mouse = Get-ItemProperty 'HKCU:\Control Panel\Mouse' -ErrorAction Stop
+                $speed = $mouse.MouseSensitivity
+                $enhanced = if ($mouse.MouseSpeed -eq '0') { 'Off' } else { 'On (acceleration)' }
+                $status.Text = "Pointer sensitivity: $speed / 20`nEnhance pointer precision: $enhanced`nMouse polling rate requires raw HID input measurement; this scan does not estimate it."
+                Log 'Mouse settings scan completed (read-only)' 'SUCCESS'
+            } catch { $status.Text = 'Unable to read pointer settings: ' + $_.Exception.Message; Log $status.Text 'WARN' }
+        }.GetNewClosure())
+        $card.Controls.Add($btn)
+        $card.Controls.Add((New-Lbl 'Check mouse firmware/software for hardware polling rate. USB stability, overlays and frame times can affect responsiveness.' 22 130 850 18 $script:Fnt.Tiny $script:Clr.Dim))
+        $flow.Controls.Add($card)
+    }
+    return (Build-TweakPage 'INPUT' 'INPUT DELAY' 'Mouse, pointer settings and input responsiveness diagnostics.' $pre)
+}
+
 # ---------- Network ----------
 function Set-Hop([int]$i, [string]$Status, [string]$Detail, $Color = $null) {
     $h = $script:Hops[$i]; if (-not $Color) { $Color = $script:Clr.Dim }
@@ -3052,6 +3093,7 @@ function Invoke-PingScan {
             Set-Hop 3 ("BEST: " + $bestR.Key.ToUpper()) ($txt + "`n(approx. via AWS regional endpoints)") $col
             $script:PingLbl.Text = "{0:N0} ms" -f $bestR.Value
         }
+        if ($script:RouterStats) { $script:LossLbl.Text = ('{0}% (gateway)' -f $script:RouterStats.Loss) }
         $script:JitLbl.Text = if ($script:RouterStats.Avg) { "{0:N1} ms (router)" -f $script:RouterStats.Jitter } else { '--' }
         $script:ConnLbl.Text = if ($wifi) { 'Wi-Fi' } else { 'Ethernet' }
     } catch { if ($_.Exception.Message -ne 'offline') { Log "Scan error: $($_.Exception.Message)" 'WARN' } }
@@ -3105,23 +3147,47 @@ function Build-Network {
             $c.Controls.Add($s); $c.Controls.Add($d); $c.Tag = @($s, $d); $c.Add_Resize({ $this.Tag[0].Width = $this.Width - 36; $this.Tag[1].Width = $this.Width - 36 })
             $flow.Controls.Add($c); $script:Hops += @{ Status = $s; Detail = $d }
         }
-        $act = New-Card 900 108 'full' $ac
-        $script:ScanBtn = New-Btn 'RUN PING OPTIMIZER SCAN' 270 40 $true $ac 'scan'; $script:ScanBtn.Location = New-Object Drawing.Point(22, 14); $script:ScanBtn.Add_Click({ Invoke-PingScan })
+        $act = New-Card 900 135 'full' $ac
+        $script:ScanBtn = New-Btn 'ANALYZE NETWORK LATENCY' 270 40 $true $ac 'scan'; $script:ScanBtn.Location = New-Object Drawing.Point(22, 14); $script:ScanBtn.Add_Click({ Invoke-PingScan })
         $script:BtnDns = New-Btn 'APPLY BEST DNS' 250 40 $false $ac 'check'; $script:BtnDns.Location = New-Object Drawing.Point(304, 14); $script:BtnDns.Enabled = $false; $script:BtnDns.Add_Click({ Set-BestDns })
         $bR = New-Btn 'RESTORE NETWORK DEFAULTS' 260 40 $false $ac 'undo'; $bR.Location = New-Object Drawing.Point(568, 14); $bR.Add_Click({ Restore-NetworkDefaults })
         $act.Controls.AddRange(@($script:ScanBtn, $script:BtnDns, $bR))
         $act.Controls.Add((New-Lbl 'BEST PING' 22 66 150 14 $script:Fnt.Tiny $script:Clr.Dim)); $script:PingLbl = New-Lbl '--' 22 80 200 22 $script:Fnt.Bold; $act.Controls.Add($script:PingLbl)
         $act.Controls.Add((New-Lbl 'JITTER' 250 66 150 14 $script:Fnt.Tiny $script:Clr.Dim)); $script:JitLbl = New-Lbl '--' 250 80 220 22 $script:Fnt.Bold; $act.Controls.Add($script:JitLbl)
         $act.Controls.Add((New-Lbl 'CONNECTION' 500 66 150 14 $script:Fnt.Tiny $script:Clr.Dim)); $script:ConnLbl = New-Lbl '--' 500 80 220 22 $script:Fnt.Bold; $act.Controls.Add($script:ConnLbl)
+        $act.Controls.Add((New-Lbl 'PACKET LOSS' 730 66 140 14 $script:Fnt.Tiny $script:Clr.Dim)); $script:LossLbl = New-Lbl '--' 730 80 150 22 $script:Fnt.Bold; $act.Controls.Add($script:LossLbl)
+        $act.Controls.Add((New-Lbl 'DNS comparison is measured from this PC. Faster DNS lookups do not guarantee lower in-game ping.' 22 113 850 16 $script:Fnt.Tiny $script:Clr.Dim))
         $flow.Controls.Add($act)
     }
-    return (Build-TweakPage 'NETWORK' 'NETWORKING' 'Scan your route, fix the weak hop, and tune the Windows network stack.' $pre)
+    return (Build-TweakPage 'NETWORK' 'NETWORKING' 'Measure gateway ping, jitter, loss, DNS response times and regional TCP reachability.' $pre)
 }
 
 # ---------- Fortnite page ----------
 function Build-Games {
     $pre = { param($flow)
         $ac = $script:PageClr.GAMES
+        $flow.Controls.Add((New-Section 'AUTO-DETECTION' $ac))
+        $det = New-Card 900 165 'full' $ac
+        $det.Controls.Add((New-Lbl 'FORTNITE INSTALLATION / STATUS' 22 10 600 24 $script:Fnt.Row $script:Clr.Text))
+        $detText = New-Lbl 'Checking Fortnite...' 22 38 790 88 $script:Fnt.Small $script:Clr.Dim
+        $det.Controls.Add($detText)
+        $renderStatus = {
+            try {
+                $v = Get-FrenzyFortniteStatus
+                $exeText = if ($v.Exe) { $v.Exe } else { 'Not found in Epic manifests / common folders' }
+                $cfgText = if ($v.Config) { $v.Config } else { 'Not found; launch Fortnite once' }
+                $runText = if ($v.Running) { 'RUNNING - close game before editing' } else { 'Not running' }
+                $detText.Text = "Install: $exeText`nConfig: $cfgText`nGame: $runText   |   Renderer: $($v.Mode)"
+                Log 'Fortnite installation/status refreshed' 'INFO'
+            } catch { $detText.Text = "Fortnite scan failed: $($_.Exception.Message)"; Log $detText.Text 'WARN' }
+        }.GetNewClosure()
+        $detBtn = New-Btn 'REFRESH DETECTION' 200 30 $false $ac 'search'
+        $detBtn.Location = New-Object Drawing.Point(670, 12)
+        $detBtn.Add_Click($renderStatus)
+        $det.Controls.Add($detBtn)
+        $det.Controls.Add((New-Lbl 'Rendering mode may not be stored reliably in the INI. Always verify it in Fortnite.' 22 135 830 16 $script:Fnt.Tiny $script:Clr.Dim))
+        $flow.Controls.Add($det)
+        & $renderStatus
         $flow.Controls.Add((New-Section 'SET THESE IN-GAME' $ac))
         $gc = New-Card 900 178 'full' $ac; $gc.Stripe = $true
         $gc.Controls.Add((New-Lbl 'No script can do this reliably - set them in Fortnite:' 22 12 800 22 $script:Fnt.Row $script:Clr.Text))
@@ -3157,6 +3223,27 @@ function Build-Games {
         $iniCard.Controls.Add($scan); $flow.Controls.Add($iniCard); & $refreshIni
     }
     return (Build-TweakPage 'GAMES' 'FORTNITE' 'Auto-detect GameUserSettings.ini and apply reversible config values; close Fortnite before applying.' $pre)
+}
+
+# ---------- Read-only Fortnite installation / status ----------
+function Get-FrenzyFortniteStatus {
+    $exe = Find-FortniteExe -Quiet
+    $cfg = Find-FnConfig
+    $running = [bool](Get-Process -Name 'FortniteClient-Win64-Shipping' -ErrorAction SilentlyContinue)
+    $mode = 'Unknown (check in-game video settings)'
+    if ($cfg) {
+        try {
+            $raw = [IO.File]::ReadAllText($cfg)
+            # The INI can suggest the selected renderer but may not be authoritative after updates.
+            if ($raw -match '(?im)^PreferredRHI\s*=\s*(.+)$') {
+                $v = $Matches[1].Trim()
+                if ($v -match 'dx12|d3d12') { $mode = 'DirectX 12 (INI indication)' }
+                elseif ($v -match 'dx11|d3d11') { $mode = 'DirectX 11 (INI indication)' }
+                else { $mode = "$v (INI indication; verify in game)" }
+            } elseif ($raw -match '(?im)^bUsePerformanceMode\s*=\s*True') { $mode = 'Performance (INI indication)' }
+        } catch { $mode = 'Unable to read config' }
+    }
+    return @{ Exe = $exe; Config = $cfg; Running = $running; Mode = $mode }
 }
 
 # ---------- Premium centers ----------
@@ -3271,6 +3358,46 @@ Fix-Scroll $script:LogBox
 $logPanel.Controls.Add($script:LogBox); $logPanel.Controls.Add($logHead); $logPanel.Controls.Add($script:Progress); $script:LogBox.BringToFront()
 $content.Controls.Add($script:PagesHost); $content.Controls.Add($logPanel); $script:PagesHost.BringToFront()
 $fm.Controls.Add($content); $fm.Controls.Add($side); $fm.Controls.Add($topBar); $content.BringToFront()
+$script:Toast = New-Object Windows.Forms.Label
+$script:Toast.Size = New-Object Drawing.Size(435, 48)
+$script:Toast.BackColor = [Drawing.Color]::FromArgb(48, 33, 65)
+$script:Toast.ForeColor = [Drawing.Color]::FromArgb(240, 244, 255)
+$script:Toast.Font = $script:Fnt.SmallB
+$script:Toast.TextAlign = 'MiddleCenter'
+$script:Toast.Visible = $false
+$fm.Controls.Add($script:Toast)
+$script:Toast.BringToFront()
+$script:ToastClock = [Diagnostics.Stopwatch]::StartNew()
+$script:ToastUntil = [long]0
+$script:ToastTimer = New-Object Windows.Forms.Timer
+$script:ToastTimer.Interval = 35
+$script:ToastTimer.Add_Tick({
+    try {
+        if (-not $script:Form -or $script:Form.IsDisposed -or -not $script:Toast -or $script:Toast.IsDisposed) { $script:ToastTimer.Stop(); return }
+        if ($script:ToastClock.ElapsedMilliseconds -gt $script:ToastUntil) { $script:Toast.Visible = $false; $script:ToastTimer.Stop(); return }
+        $dest = [math]::Max(0, $script:Form.ClientSize.Width - $script:Toast.Width - 22)
+        $current = $script:Toast.Left
+        $next = [math]::Max($dest, $current - 30)
+        $script:Toast.Left = [int]$next
+        $script:Toast.Top = 92
+    } catch { try { $script:ToastTimer.Stop() } catch {} }
+})
+function Show-FrenzyToast([string]$message, [string]$level = 'INFO') {
+    if (-not $script:Toast -or $script:Toast.IsDisposed -or -not $script:Form -or $script:Form.IsDisposed) { return }
+    $script:Toast.Text = "$level  |  $message"
+    $script:Toast.BackColor = switch ($level) {
+        'ERROR' { [Drawing.Color]::FromArgb(100, 34, 46) }
+        'WARN' { [Drawing.Color]::FromArgb(100, 71, 27) }
+        'SUCCESS' { [Drawing.Color]::FromArgb(26, 88, 66) }
+        default { [Drawing.Color]::FromArgb(55, 35, 85) }
+    }
+    $script:Toast.Location = New-Object Drawing.Point($script:Form.ClientSize.Width, 92)
+    $script:ToastUntil = $script:ToastClock.ElapsedMilliseconds + 2800
+    $script:Toast.Visible = $true
+    $script:Toast.BringToFront()
+    $script:ToastTimer.Start()
+}
+
 Pump
 
 # pages (the splash keeps animating because we pump between builds)
@@ -3278,7 +3405,7 @@ Add-Page (Build-Home); Pump
 Add-Page (Build-TweakPage 'GENERAL' 'GENERAL' 'Baseline Windows privacy, notifications and cleanup. Flip the switches you want, then APPLY CHANGES.'); Pump
 Add-Page (Build-Debloat); Pump
 Add-Page (Build-RestoreCenter); Pump
-Add-Page (Build-TweakPage 'INPUT' 'INPUT DELAY' 'Mouse, keyboard, overlay and background-service tweaks that keep your inputs responsive.'); Pump
+Add-Page (Build-InputDiagnostics); Pump
 Add-Page (Build-Gpu); Pump
 Add-Page (Build-Network); Pump
 Add-Page (Build-Games); Pump
@@ -3293,6 +3420,7 @@ $script:Timer.Add_Tick({
 })
 $fm.Add_FormClosing({
     try { if ($script:Timer) { $script:Timer.Stop() } } catch {}
+    try { if ($script:ToastTimer) { $script:ToastTimer.Stop() } } catch {}
     try { if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop() } } catch {}
 })
 Log ("Loaded {0} tweaks. {1} detected ({2}). Laptop Guard: {3}." -f $script:Tweaks.Count, $(if ($script:Sys.IsLaptop) { 'Laptop' } else { 'Desktop' }), $script:Sys.Model, $(if ($script:Guard) { 'ON' } else { 'OFF' }))
@@ -3345,5 +3473,6 @@ if ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed) {
 try { [void]$fm.ShowDialog() }
 finally {
     try { if ($script:Timer) { $script:Timer.Stop(); $script:Timer.Dispose() } } catch {}
+    try { if ($script:ToastTimer) { $script:ToastTimer.Stop(); $script:ToastTimer.Dispose() } } catch {}
     try { if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop(); $global:FrenzySplashTimer.Dispose(); $global:FrenzySplashTimer = $null } } catch {}
 }

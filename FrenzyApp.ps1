@@ -1600,7 +1600,7 @@ function New-LogoBox([int]$Size, $BgColor) {
 }
 # ---------- Startup loader (fallback when the GitHub bootstrap has no splash) ----------
 # Decorative startup screen: it does not claim that a network connection succeeded.
-# Keep it visible for at least 8 seconds, and close it only after the main window is shown.
+# Keep it visible for at least 10 seconds, and close only the splash after the main window is ready.
 if (-not $global:FrenzySplashForm) {
     try {
         $global:FrenzySplashReady = $false
@@ -1652,18 +1652,23 @@ if (-not $global:FrenzySplashForm) {
                 $global:FrenzySplashTimer.Stop(); return
             }
             $elapsed = ([DateTime]::UtcNow - $global:FrenzySplashStarted).TotalSeconds
-            $pct = [Math]::Min(94, [int](($elapsed / 8.0) * 94))
+            $pct = [Math]::Min(100, [int](($elapsed / 10.0) * 100))
             $fill.Width = [Math]::Max(2, [int](360 * $pct / 100.0))
             if ($elapsed -lt 2) { $status.Text = 'PREPARING FRENZY TWEAKS...'; $foot.Text = 'INITIALIZING COMPONENTS' }
-            elseif ($elapsed -lt 4) { $status.Text = 'CONNECTING / CHECKING STARTUP...'; $foot.Text = 'CHECKING LOCAL ENVIRONMENT' }
-            elseif ($elapsed -lt 6.5) { $status.Text = 'LOADING INTERFACE...'; $foot.Text = 'PREPARING PERFORMANCE TOOLS' }
-            else { $status.Text = 'LAUNCHING APP...'; $foot.Text = 'ALMOST READY' }
-            if ($global:FrenzySplashReady -and $elapsed -ge 8) {
+            elseif ($elapsed -lt 4) { $status.Text = 'CONNECTING TO GITHUB...'; $foot.Text = 'CHECKING STARTUP SOURCE' }
+            elseif ($elapsed -lt 6) { $status.Text = 'AUTHENTICATING SESSION...'; $foot.Text = 'VERIFYING LOCAL STARTUP' }
+            elseif ($elapsed -lt 8) { $status.Text = 'LOADING INTERFACE...'; $foot.Text = 'PREPARING PERFORMANCE TOOLS' }
+            else { $status.Text = 'LAUNCHING APP...'; $foot.Text = 'STARTUP COMPLETE' }
+            if ($global:FrenzySplashReady -and $elapsed -ge 10) {
                 $global:FrenzySplashTimer.Stop()
-                try { $global:FrenzySplashForm.TopMost = $false; $global:FrenzySplashForm.Close(); $global:FrenzySplashForm.Dispose() } catch {}
+                # Hide/dispose only the splash; never close the PowerShell host or main form.
+                $splashToClose = $global:FrenzySplashForm
                 $global:FrenzySplashForm = $null
+                try { $splashToClose.TopMost = $false; $splashToClose.Hide(); $splashToClose.Dispose() } catch {}
                 try {
                     if ($script:Form -and -not $script:Form.IsDisposed) {
+                        if (-not $script:Form.Visible) { $script:Form.Show() }
+                        $script:Form.WindowState = [Windows.Forms.FormWindowState]::Normal
                         $script:Form.Activate()
                         [Fz.Native]::Foreground($script:Form.Handle)
                     }
@@ -3234,12 +3239,12 @@ Update-GameCard; Update-Home; Show-Page 'HOME'; Pump
 $fm.Add_Shown({
         try { [Fz.Native]::DarkTitle($this.Handle) } catch {}
         $this.Activate(); [Fz.Native]::Foreground($this.Handle)
-        # For our built-in splash, wait until its 8-second animation finishes.
+        # For our built-in splash, wait until its 10-second animation finishes.
         # A splash created by an external GitHub bootstrap keeps its own lifecycle.
         if ($global:FrenzySplashForm) {
             if ($global:FrenzySplashStarted) {
                 $global:FrenzySplashReady = $true
-                # The splash timer will close it at 8 seconds; keep the main form behind it meanwhile.
+                # The splash timer will remove only the splash at 10 seconds; keep the main form available behind it.
                 try { $this.BeginInvoke([Action]{ if ($global:FrenzySplashForm) { $global:FrenzySplashForm.Activate() } }) | Out-Null } catch {}
             } else {
                 try {

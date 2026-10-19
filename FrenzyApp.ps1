@@ -807,6 +807,13 @@ function Log([string]$m, [string]$lvl = 'INFO') {
     if ($script:LogBox) {
         $script:LogBox.AppendText($line + "`r`n")
     }
+    # Persistent, non-blocking activity notice; no extra Windows Forms timer.
+    if ($script:ActivityNotice -and -not $script:ActivityNotice.IsDisposed) {
+        try {
+            $script:ActivityNotice.Text = ('{0}  |  {1}' -f $lvl, $m)
+            $script:ActivityNotice.ForeColor = $(if ($lvl -eq 'ERROR') { [Drawing.Color]::FromArgb(255,100,120) } elseif ($lvl -eq 'WARN') { [Drawing.Color]::FromArgb(255,193,90) } else { [Drawing.Color]::FromArgb(160,125,255) })
+        } catch {}
+    }
 }
 
 # ---------- Helpers ----------
@@ -1562,6 +1569,8 @@ $script:Tip = New-Object Windows.Forms.ToolTip; $script:Tip.AutoPopDelay = 15000
 $script:Pages = @{}; $script:Rows = New-Object System.Collections.ArrayList; $script:GroupHdr = New-Object System.Collections.ArrayList
 $script:Tiles = @{}; $script:CurrentPage = 'HOME'; $script:Busy = $false; $script:RPDone = $false; $script:Loading = $false
 $script:NavButtons = @{}
+$script:ActivityNotice = $null
+$script:ActivePageNotice = $null
 $STAR = [string][char]0x2605; $REV = [string][char]0x21BA; $DOT = [string][char]0x25CF; $BAR = [string][char]0x258C
 $script:Links = [ordered]@{ Discord = ''; X = ''; TikTok = ''; YouTube = '' }   # <- put your own links here
 
@@ -2182,6 +2191,7 @@ function Invoke-Run($ApplyList, $UndoList, [bool]$Confirm = $true) {
     }
     if (-not $dry -and $ApplyList.Count -gt 0 -and $script:chkRP.Checked -and -not $script:RPDone) { New-RestorePoint }
     $script:Busy = $true; $script:RebootNeeded = $false; $script:Form.UseWaitCursor = $true
+    if ($script:ActivityNotice) { $script:ActivityNotice.Text = 'WORKING  |  Applying selected changes...' }
     $script:Progress.Maximum = [Math]::Max(1, $total); $script:Progress.Value = 0; $i = 0; $ok = 0; $fail = 0; $skipped = 0
     try {
         foreach ($pair in (@($ApplyList | ForEach-Object { @{ T = $_; M = 'Apply' } }) + @($UndoList | ForEach-Object { @{ T = $_; M = 'Undo' } }))) {
@@ -2196,6 +2206,10 @@ function Invoke-Run($ApplyList, $UndoList, [bool]$Confirm = $true) {
         }
     } finally { $script:Busy = $false; $script:Form.UseWaitCursor = $false }
     Log "OPTIMIZATION SUMMARY - Applied/Restored: $ok  Failed: $fail  Skipped: $skipped"
+    if ($script:ActivityNotice) {
+        $script:ActivityNotice.Text = $(if ($fail -gt 0) { "COMPLETED WITH ERRORS  |  $ok successful, $fail failed" } elseif ($dry) { "PREVIEW COMPLETE  |  $skipped changes reviewed" } else { "SUCCESS  |  $ok changes completed" })
+        $script:ActivityNotice.ForeColor = $(if ($fail -gt 0) { [Drawing.Color]::FromArgb(255,193,90) } else { [Drawing.Color]::FromArgb(74,222,128) })
+    }
     Refresh-AllRows; Update-Home
     if (-not $dry) {
         $m = "FRENZY TWEAKS - OPTIMIZATION SUMMARY`n`nSuccessful: $ok`nFailed: $fail`nSkipped: $skipped`n`nRestart: may be required for some changes."
@@ -2779,7 +2793,7 @@ function Update-Home {
 
 # ---------- Home page ----------
 function Build-Home {
-    $p = New-PageShell 'HOME' 'HOME' 'Live system overview, one-click recommendations and rollback safety.' 108
+    $p = New-PageShell 'HOME' 'DASHBOARD' 'Live performance telemetry, detailed device information and reversible optimizations.' 108
     $flow = $script:Pages['HOME'].Flow; $script:H = @{}; $ac = $script:PageClr.HOME
     $hero = New-Object Fz.FzHero; $hero.Name = 'full'; $hero.Height = 176; $hero.Width = 900; $hero.Accent = $ac; $hero.Margin = New-Object Windows.Forms.Padding(0, 0, 12, 12)
     $hero.Controls.Add((New-Lbl "// SYSTEM ONLINE" 38 22 400 18 $script:Fnt.MonoB $ac))
@@ -2796,7 +2810,7 @@ function Build-Home {
     $hero.Tag = @($script:H.BtnRec, $bRp); $hero.Add_Resize({ foreach ($b in $this.Tag) { $b.Left = $this.Width - 330 } }); $hero.Width = 901
     $flow.Controls.Add($hero)
 
-    $flow.Controls.Add((New-Section 'LIVE TELEMETRY' $ac))
+    $flow.Controls.Add((New-Section 'LIVE TELEMETRY  /  5-SECOND REFRESH' $ac))
     $script:Tiles.cpu = New-Tile 'CPU' (New-Rgb 255 106 0); $script:Tiles.gpu = New-Tile 'GPU' (New-Rgb 74 222 128)
     $script:Tiles.mem = New-Tile 'MEMORY' (New-Rgb 77 141 255); $script:Tiles.net = New-Tile 'NETWORK' (New-Rgb 168 85 247)
     foreach ($k in 'cpu', 'gpu', 'mem', 'net') { $flow.Controls.Add($script:Tiles[$k].Panel) }
@@ -3094,6 +3108,8 @@ function Build-Games {
         $iniCard.Controls.Add((New-Lbl 'GAMEUSERSETTINGS.INI DETECTION' 22 12 420 22 $script:Fnt.Row $script:Clr.Text))
         $iniStatus = New-Lbl '' 22 40 650 36 $script:Fnt.Small $script:Clr.Dim; $iniStatus.AutoEllipsis = $true
         $iniCard.Controls.Add($iniStatus)
+        $iniHint = New-Lbl 'Detection is read-only. Close Fortnite before applying any config changes.' 22 80 630 18 $script:Fnt.Tiny $script:Clr.Dim
+        $iniCard.Controls.Add($iniHint)
         # Capture real Color objects before GetNewClosure changes the script scope.
         $iniGoodColor = [Drawing.Color]::FromArgb(74, 222, 128)
         $iniWarnColor = [Drawing.Color]::FromArgb(255, 193, 7)
@@ -3131,6 +3147,7 @@ function Build-RestoreCenter {
 function Show-Page([string]$Key) {
     foreach ($k in $script:Pages.Keys) { $script:Pages[$k].Panel.Visible = ($k -eq $Key) }
     $script:CurrentPage = $Key
+    if ($script:ActivePageNotice) { $script:ActivePageNotice.Text = 'OPEN  /  ' + $Key }
     if ($script:Pages[$Key].Flow) { Fit-Flow $script:Pages[$Key].Flow }
     foreach ($k in $script:NavButtons.Keys) { $script:NavButtons[$k].Select($k -eq $Key) }
     Update-Footer $Key
@@ -3161,6 +3178,9 @@ $tbLogo = New-LogoBox 34 $script:Clr.Side; $tbLogo.Location = New-Object Drawing
 $topBar.Controls.Add((New-Wordmark 60 17 21 2.5 $script:Clr.Side))
 $brandSub = New-Lbl 'GAMING PERFORMANCE SUITE' 62 40 260 12 $script:Fnt.Tiny $script:Clr.Dim
 $topBar.Controls.Add($brandSub)
+# Compact status breadcrumb, integrated into the header without a popup.
+$script:ActivePageNotice = New-Lbl 'OPEN  /  HOME' 348 21 220 20 $script:Fnt.MonoB ([Drawing.Color]::FromArgb(160,125,255))
+$topBar.Controls.Add($script:ActivePageNotice)
 try { $ib = New-Object Drawing.Bitmap(64, 64); $ig = [Drawing.Graphics]::FromImage($ib); $ig.SmoothingMode = 'AntiAlias'; Draw-FrenzyLogo $ig 2 2 60; $fm.Icon = [Drawing.Icon]::FromHandle($ib.GetHicon()); $ig.Dispose() } catch {}
 $topRight = New-Object Windows.Forms.FlowLayoutPanel; $topRight.Dock = 'Right'; $topRight.Width = 760; $topRight.FlowDirection = 'RightToLeft'; $topRight.BackColor = $script:Clr.Side
 $topRight.Padding = New-Object Windows.Forms.Padding(0, 13, 14, 0)
@@ -3211,7 +3231,12 @@ $content = New-Object Windows.Forms.Panel; $content.Dock = 'Fill'; $content.Back
 $script:PagesHost = New-Object Windows.Forms.Panel; $script:PagesHost.Dock = 'Fill'; $script:PagesHost.BackColor = $script:Clr.Bg
 $logPanel = New-Object Windows.Forms.Panel; $logPanel.Dock = 'Bottom'; $logPanel.Height = 150; $logPanel.BackColor = $script:Clr.Side
 $script:Progress = New-Object Fz.FzProgress; $script:Progress.Dock = 'Top'; $script:Progress.Height = 5; $script:Progress.Accent = $script:Clr.Accent
-$logHead = New-Lbl "$BAR ACTIVITY LOG" 0 0 300 24 $script:Fnt.Tiny $script:Clr.Accent; $logHead.Dock = 'Top'; $logHead.Height = 24; $logHead.Padding = New-Object Windows.Forms.Padding(20, 6, 0, 0); $logHead.BackColor = $script:Clr.Side
+$logHead = New-Object Windows.Forms.Panel; $logHead.Dock = 'Top'; $logHead.Height = 30; $logHead.BackColor = $script:Clr.Side
+$logTitle = New-Lbl "$BAR ACTIVITY LOG" 18 6 180 20 $script:Fnt.Tiny $script:Clr.Accent
+$script:ActivityNotice = New-Lbl 'READY  |  Live operation feedback' 212 6 700 20 $script:Fnt.Tiny $script:Clr.Dim
+$script:ActivityNotice.AutoEllipsis = $true
+$logHead.Controls.Add($logTitle); $logHead.Controls.Add($script:ActivityNotice)
+$logHead.Add_Resize({ $script:ActivityNotice.Width = [math]::Max(150, $this.Width - 230) })
 $script:LogBox = New-Object Windows.Forms.TextBox; $script:LogBox.Multiline = $true; $script:LogBox.ReadOnly = $true; $script:LogBox.ScrollBars = 'Vertical'; $script:LogBox.Dock = 'Fill'
 $script:LogBox.BackColor = (New-Rgb 6 9 17); $script:LogBox.ForeColor = (New-Rgb 150 190 255); $script:LogBox.Font = $script:Fnt.Mono; $script:LogBox.BorderStyle = 'None'
 Fix-Scroll $script:LogBox

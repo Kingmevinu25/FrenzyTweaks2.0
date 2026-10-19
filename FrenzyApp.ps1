@@ -1,6 +1,6 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
-  FRENZY TWEAKS v1.2  (WinForms UI)
+  FRENZY TWEAKS v2.0.0  (WinForms UI)
   - Applies / undoes the tweaks from your list
   - Creates a restore point first; backs up the REAL original value of every registry
     setting, service and task it touches, so Undo restores your actual previous state
@@ -831,10 +831,15 @@ function Set-Reg($Path, $Name, $Value, $Type = 'DWord', [switch]$NoBackup) {
             $null = New-Item -Path $Path -Force -ErrorAction Stop
         }
         $key = Get-Item -LiteralPath $Path -ErrorAction Stop
-        $existing = $key.GetValue($Name, $null, 'DoNotExpandEnvironmentNames')
-        if ($null -ne $existing -and [string]$existing -ceq [string]$Value -and
-            $key.GetValueKind($Name).ToString() -eq $Type) { return }
+        # Save the original value BEFORE the no-op check. Otherwise a value that
+        # already matches the requested setting has no backup, and Undo may write
+        # the generic fallback over the user's real original value.
         if (-not $NoBackup) { Backup-Reg $Path $Name }
+        $key = Get-Item -LiteralPath $Path -ErrorAction Stop
+        $hasExisting = $key.GetValueNames() -contains $Name
+        $existing = if ($hasExisting) { $key.GetValue($Name, $null, 'DoNotExpandEnvironmentNames') } else { $null }
+        if ($hasExisting -and [string]$existing -ceq [string]$Value -and
+            $key.GetValueKind($Name).ToString() -eq $Type) { return }
         $null = New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType $Type -Force -ErrorAction Stop
         $actual = (Get-Item -LiteralPath $Path -ErrorAction Stop).GetValue($Name, $null, 'DoNotExpandEnvironmentNames')
         if ([string]$actual -cne [string]$Value) { throw 'Registry read-back verification failed.' }
@@ -849,8 +854,17 @@ function Remove-Reg($Path, $Name) { Remove-ItemProperty -Path $Path -Name $Name 
 function Restore-Reg($Path, $Name, $Fallback, $Type = 'DWord') {
     $k = "reg|$Path|$Name"
     if ($script:State.ContainsKey($k)) {
-        $o = $script:State[$k]; $script:State.Remove($k); Save-State
-        if ($o.Absent) { Remove-Reg $Path $Name } else { Set-Reg $Path $Name $o.V $o.K -NoBackup }
+        $o = $script:State[$k]
+        # Keep the backup until restoration succeeds, so a failed registry write
+        # can be retried instead of permanently losing the original value.
+        if ($o.Absent) {
+            if (Test-Path -LiteralPath $Path) {
+                Remove-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction SilentlyContinue
+            }
+        } else {
+            Set-Reg $Path $Name $o.V $o.K -NoBackup
+        }
+        $script:State.Remove($k); Save-State
         return
     }
     if ($null -ne $Fallback) { Set-Reg $Path $Name $Fallback $Type -NoBackup } else { Remove-Reg $Path $Name }
@@ -914,28 +928,41 @@ function Disable-Feat([string[]]$Names) {
     foreach ($n in $Names) {
         $f = Get-WindowsOptionalFeature -Online -FeatureName $n -ErrorAction SilentlyContinue
         if ($f -and $f.State -eq 'Enabled') {
-            Disable-WindowsOptionalFeature -Online -FeatureName $n -NoRestart -ErrorAction SilentlyContinue | Out-Null
-            $script:State["feat:$n"] = $true; Save-State
-            $script:RebootNeeded = $true
-            Log "Disabled feature $n"
+            try {
+                Disable-WindowsOptionalFeature -Online -FeatureName $n -NoRestart -ErrorAction Stop | Out-Null
+                $verify = Get-WindowsOptionalFeature -Online -FeatureName $n -ErrorAction Stop
+                if ($verify.State -notin 'Disabled', 'DisablePending') { throw "Feature state after disable was '$($verify.State)'" }
+                $script:State["feat:$n"] = $true; Save-State
+                $script:RebootNeeded = $true
+                Log "Disabled feature $n"
+            } catch { Log "FAILED disabling feature $n : $($_.Exception.Message)" 'ERROR' }
         }
     }
 }
 function Enable-Feat([string[]]$Names) {
     foreach ($n in $Names) {
         if ($script:State.ContainsKey("feat:$n")) {
-            Enable-WindowsOptionalFeature -Online -FeatureName $n -NoRestart -ErrorAction SilentlyContinue | Out-Null
-            $script:State.Remove("feat:$n"); Save-State
-            $script:RebootNeeded = $true
-            Log "Re-enabled feature $n"
+            try {
+                Enable-WindowsOptionalFeature -Online -FeatureName $n -NoRestart -ErrorAction Stop | Out-Null
+                $verify = Get-WindowsOptionalFeature -Online -FeatureName $n -ErrorAction Stop
+                if ($verify.State -notin 'Enabled', 'EnablePending') { throw "Feature state after enable was '$($verify.State)'" }
+                $script:State.Remove("feat:$n"); Save-State
+                $script:RebootNeeded = $true
+                Log "Re-enabled feature $n"
+            } catch { Log "FAILED restoring feature $n : $($_.Exception.Message)" 'ERROR' }
         }
     }
 }
 
 function Clear-Folder([string]$Path, [string]$Filter = '*') {
     if (-not (Test-Path $Path)) { Log "$Path not found" 'WARN'; return }
-    $items = Get-ChildItem -Path $Path -Filter $Filter -Force -ErrorAction SilentlyContinue
-    $size = ($items | Get-ChildItem -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+    $items = @(Get-ChildItem -LiteralPath $Path -Filter $Filter -Force -ErrorAction SilentlyContinue)
+    # Include files directly inside the target as well as files in subfolders.
+    $files = @($items | ForEach-Object {
+        if ($_.PSIsContainer) { Get-ChildItem -LiteralPath $_.FullName -File -Recurse -Force -ErrorAction SilentlyContinue }
+        else { $_ }
+    })
+    $size = ($files | Measure-Object -Property Length -Sum).Sum
     $items | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
     Log ("Cleaned {0} (~{1} MB)" -f $Path, [math]::Round(([double]$size) / 1MB, 1))
 }
@@ -957,8 +984,11 @@ function Restore-NicProp([string[]]$Keywords) {
     foreach ($k in @($script:State.Keys | Where-Object { $_ -like 'nic|*' })) {
         $parts = $k.Split('|')
         if ($Keywords -contains $parts[2]) {
-            try { Set-NetAdapterAdvancedProperty -Name $parts[1] -RegistryKeyword $parts[2] -RegistryValue $script:State[$k] -ErrorAction Stop; Log "NIC $($parts[1]): $($parts[2]) restored" } catch {}
-            $script:State.Remove($k)
+            try {
+                Set-NetAdapterAdvancedProperty -Name $parts[1] -RegistryKeyword $parts[2] -RegistryValue $script:State[$k] -ErrorAction Stop
+                Log "NIC $($parts[1]): $($parts[2]) restored"
+                $script:State.Remove($k)
+            } catch { Log "NIC restore failed ($($parts[1]) / $($parts[2])): $($_.Exception.Message)" 'WARN' }
         }
     }
     Save-State
@@ -1568,6 +1598,86 @@ function New-LogoBox([int]$Size, $BgColor) {
     $p.Add_Paint({ param($sn, $e) $e.Graphics.SmoothingMode = 'AntiAlias'; Draw-FrenzyLogo $e.Graphics 1 1 ($sn.Width - 2) })
     return $p
 }
+# ---------- Startup loader (fallback when the GitHub bootstrap has no splash) ----------
+# Decorative startup screen: it does not claim that a network connection succeeded.
+# Keep it visible for at least 8 seconds, and close it only after the main window is shown.
+if (-not $global:FrenzySplashForm) {
+    try {
+        $global:FrenzySplashReady = $false
+        $global:FrenzySplashStarted = [DateTime]::UtcNow
+        $global:FrenzySplashForm = New-Object Windows.Forms.Form
+        $sf = $global:FrenzySplashForm
+        $sf.Text = 'FRENZY TWEAKS'
+        $sf.FormBorderStyle = 'None'; $sf.StartPosition = 'CenterScreen'
+        $sf.ClientSize = New-Object Drawing.Size(470, 270)
+        $sf.BackColor = [Drawing.Color]::FromArgb(8, 11, 21)
+        $sf.ShowInTaskbar = $false; $sf.TopMost = $true; $sf.Opacity = 0
+        $sf.Add_Shown({ $this.Opacity = 1 })
+
+        $logo = New-LogoBox 62 $sf.BackColor
+        $logo.Location = New-Object Drawing.Point(204, 26)
+        $sf.Controls.Add($logo)
+        $brand = New-Object Windows.Forms.Label
+        $brand.Text = 'F R E N Z Y'; $brand.ForeColor = [Drawing.Color]::FromArgb(245, 247, 255)
+        $brand.Font = New-Object Drawing.Font('Segoe UI', 21, [Drawing.FontStyle]::Bold)
+        $brand.TextAlign = 'MiddleCenter'; $brand.Location = New-Object Drawing.Point(30, 99)
+        $brand.Size = New-Object Drawing.Size(410, 36); $sf.Controls.Add($brand)
+        $sub = New-Object Windows.Forms.Label
+        $sub.Text = 'G A M I N G   P E R F O R M A N C E   S U I T E'
+        $sub.ForeColor = [Drawing.Color]::FromArgb(138, 152, 184)
+        $sub.Font = New-Object Drawing.Font('Segoe UI', 8, [Drawing.FontStyle]::Regular)
+        $sub.TextAlign = 'MiddleCenter'; $sub.Location = New-Object Drawing.Point(30, 136)
+        $sub.Size = New-Object Drawing.Size(410, 22); $sf.Controls.Add($sub)
+        $status = New-Object Windows.Forms.Label
+        $status.Text = 'PREPARING FRENZY TWEAKS...'; $status.ForeColor = [Drawing.Color]::FromArgb(255, 126, 35)
+        $status.Font = New-Object Drawing.Font('Consolas', 9, [Drawing.FontStyle]::Bold)
+        $status.TextAlign = 'MiddleCenter'; $status.Location = New-Object Drawing.Point(30, 183)
+        $status.Size = New-Object Drawing.Size(410, 22); $sf.Controls.Add($status)
+        $track = New-Object Windows.Forms.Panel
+        $track.Location = New-Object Drawing.Point(55, 216); $track.Size = New-Object Drawing.Size(360, 5)
+        $track.BackColor = [Drawing.Color]::FromArgb(36, 45, 65); $sf.Controls.Add($track)
+        $fill = New-Object Windows.Forms.Panel
+        $fill.Location = New-Object Drawing.Point(0, 0); $fill.Size = New-Object Drawing.Size(0, 5)
+        $fill.BackColor = [Drawing.Color]::FromArgb(255, 106, 0); $track.Controls.Add($fill)
+        $foot = New-Object Windows.Forms.Label
+        $foot.Text = 'INITIALIZING COMPONENTS'; $foot.ForeColor = [Drawing.Color]::FromArgb(92, 108, 139)
+        $foot.Font = New-Object Drawing.Font('Consolas', 7.5)
+        $foot.TextAlign = 'MiddleCenter'; $foot.Location = New-Object Drawing.Point(30, 230)
+        $foot.Size = New-Object Drawing.Size(410, 18); $sf.Controls.Add($foot)
+
+        $global:FrenzySplashTimer = New-Object Windows.Forms.Timer
+        $global:FrenzySplashTimer.Interval = 100
+        $global:FrenzySplashTimer.Add_Tick({
+            if (-not $global:FrenzySplashForm -or $global:FrenzySplashForm.IsDisposed) {
+                $global:FrenzySplashTimer.Stop(); return
+            }
+            $elapsed = ([DateTime]::UtcNow - $global:FrenzySplashStarted).TotalSeconds
+            $pct = [Math]::Min(94, [int](($elapsed / 8.0) * 94))
+            $fill.Width = [Math]::Max(2, [int](360 * $pct / 100.0))
+            if ($elapsed -lt 2) { $status.Text = 'PREPARING FRENZY TWEAKS...'; $foot.Text = 'INITIALIZING COMPONENTS' }
+            elseif ($elapsed -lt 4) { $status.Text = 'CONNECTING / CHECKING STARTUP...'; $foot.Text = 'CHECKING LOCAL ENVIRONMENT' }
+            elseif ($elapsed -lt 6.5) { $status.Text = 'LOADING INTERFACE...'; $foot.Text = 'PREPARING PERFORMANCE TOOLS' }
+            else { $status.Text = 'LAUNCHING APP...'; $foot.Text = 'ALMOST READY' }
+            if ($global:FrenzySplashReady -and $elapsed -ge 8) {
+                $global:FrenzySplashTimer.Stop()
+                try { $global:FrenzySplashForm.TopMost = $false; $global:FrenzySplashForm.Close(); $global:FrenzySplashForm.Dispose() } catch {}
+                $global:FrenzySplashForm = $null
+                try {
+                    if ($script:Form -and -not $script:Form.IsDisposed) {
+                        $script:Form.Activate()
+                        [Fz.Native]::Foreground($script:Form.Handle)
+                    }
+                } catch {}
+            }
+        })
+        $sf.Show(); $sf.Refresh(); $global:FrenzySplashTimer.Start()
+    } catch {
+        # A splash-screen failure must never prevent the main app from opening.
+        $global:FrenzySplashForm = $null
+        if ($global:FrenzySplashTimer) { try { $global:FrenzySplashTimer.Stop() } catch {} }
+    }
+}
+
 function Measure-Spaced($g, [string]$txt, $font, [single]$sp) {
     $fmt = [Drawing.StringFormat]::GenericTypographic; $w = [double]0; $pt = New-Object Drawing.PointF(0, 0)
     $nW = $g.MeasureString('n', $font, $pt, $fmt).Width
@@ -2759,6 +2869,7 @@ function Invoke-NvApply {
         $npi = Find-NPI; if (-not $npi) { throw 'NVIDIA Profile Inspector not available.' }
         $pr = Start-Process -FilePath $npi -ArgumentList "-silentImport `"$custom`"" -Wait -PassThru
         Log "Profile Inspector exit code: $($pr.ExitCode)"
+        if ($pr.ExitCode -ne 0) { throw "NVIDIA Profile Inspector import failed with exit code $($pr.ExitCode). Settings were not marked as applied." }
         foreach ($i in $ids) { $script:State["nv:$i"] = $true }; Save-State
         foreach ($r in $script:NvRows) { if ($script:State.ContainsKey("nv:$($r.Id)")) { $r.Status.Text = "$DOT APPLIED"; $r.Status.ForeColor = $script:Clr.Good } }
     } catch { Log "NVIDIA import failed: $($_.Exception.Message)" 'ERROR' }
@@ -2914,8 +3025,12 @@ function Restore-NetworkDefaults {
     if ([Fz.Msg]::Show('Undo every active network tweak and restore your previous DNS servers?', 'Restore network defaults', 'YesNo', 'Question') -ne 'Yes') { return }
     foreach ($k in @($script:State.Keys | Where-Object { $_ -like 'dns|*' })) {
         $idx = [int]$k.Split('|')[1]; $old = @($script:State[$k].Old)
-        try { if ($old.Count -eq 0 -or $script:State[$k].Dhcp -eq $true) { Set-DnsClientServerAddress -InterfaceIndex $idx -ResetServerAddresses } else { Set-DnsClientServerAddress -InterfaceIndex $idx -ServerAddresses $old }; Log "DNS restored for interface $idx" } catch { Log "DNS restore failed: $($_.Exception.Message)" 'WARN' }
-        $script:State.Remove($k)
+        try {
+            if ($old.Count -eq 0 -or $script:State[$k].Dhcp -eq $true) { Set-DnsClientServerAddress -InterfaceIndex $idx -ResetServerAddresses }
+            else { Set-DnsClientServerAddress -InterfaceIndex $idx -ServerAddresses $old }
+            Log "DNS restored for interface $idx"
+            $script:State.Remove($k)
+        } catch { Log "DNS restore failed: $($_.Exception.Message)" 'WARN' }
     }
     Save-State
     $act = @($script:Rows | Where-Object { $_.Page -eq 'NETWORK' -and -not $_.OneShot -and $_.Active } | ForEach-Object { $_.T })
@@ -3119,22 +3234,23 @@ Update-GameCard; Update-Home; Show-Page 'HOME'; Pump
 $fm.Add_Shown({
         try { [Fz.Native]::DarkTitle($this.Handle) } catch {}
         $this.Activate(); [Fz.Native]::Foreground($this.Handle)
-        # Close the splash immediately once the main form is actually visible.
-        # ShowDialog starts a modal message loop; relying on the loader's animation
-        # timer to close it can leave a topmost splash over the application.
+        # For our built-in splash, wait until its 8-second animation finishes.
+        # A splash created by an external GitHub bootstrap keeps its own lifecycle.
         if ($global:FrenzySplashForm) {
-            try {
-                if ($global:FrenzySplash) { $global:FrenzySplash.Closing = $true }
-                if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop() }
-                $global:FrenzySplashForm.TopMost = $false
-                $global:FrenzySplashForm.Opacity = 0
-                $global:FrenzySplashForm.Hide()
-                $global:FrenzySplashForm.Close()
-            } catch {
-                try { $global:FrenzySplashForm.Hide() } catch {}
+            if ($global:FrenzySplashStarted) {
+                $global:FrenzySplashReady = $true
+                # The splash timer will close it at 8 seconds; keep the main form behind it meanwhile.
+                try { $this.BeginInvoke([Action]{ if ($global:FrenzySplashForm) { $global:FrenzySplashForm.Activate() } }) | Out-Null } catch {}
+            } else {
+                try {
+                    if ($global:FrenzySplash) { $global:FrenzySplash.Closing = $true }
+                    if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop() }
+                    $global:FrenzySplashForm.TopMost = $false
+                    $global:FrenzySplashForm.Opacity = 0
+                    $global:FrenzySplashForm.Hide()
+                    $global:FrenzySplashForm.Close()
+                } catch { try { $global:FrenzySplashForm.Hide() } catch {} }
             }
-            $this.Activate()
-            try { [Fz.Native]::Foreground($this.Handle) } catch {}
         }
         $script:Timer.Start()
     })

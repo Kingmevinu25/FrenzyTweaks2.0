@@ -1671,12 +1671,14 @@ if (-not $global:FrenzySplashForm) {
         $foot.TextAlign = 'MiddleCenter'; $foot.Location = New-Object Drawing.Point(30, 230)
         $foot.Size = New-Object Drawing.Size(410, 18); $sf.Controls.Add($foot)
 
-        $global:FrenzySplashTimer = New-Object Windows.Forms.Timer
-        $global:FrenzySplashTimer.Interval = 100
-        $global:FrenzySplashTimer.Add_Tick({
-            if (-not $global:FrenzySplashForm -or $global:FrenzySplashForm.IsDisposed) {
-                $global:FrenzySplashTimer.Stop(); return
-            }
+        # Update the splash synchronously instead of using a PowerShell Timer callback.
+        # Timer callbacks can fire after an iex pipeline ends, causing PipelineStoppedException.
+        $sf.Show(); $sf.Refresh()
+
+        # Complete the splash BEFORE building/showing the main application.
+        # Pump WinForms events so the animation and progress text keep updating.
+        while ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed -and
+               (([DateTime]::UtcNow - $global:FrenzySplashStarted).TotalSeconds -lt 10)) {
             $elapsed = ([DateTime]::UtcNow - $global:FrenzySplashStarted).TotalSeconds
             $pct = [Math]::Min(100, [int](($elapsed / 10.0) * 100))
             $fill.Width = [Math]::Max(2, [int](360 * $pct / 100.0))
@@ -1685,28 +1687,6 @@ if (-not $global:FrenzySplashForm) {
             elseif ($elapsed -lt 6) { $status.Text = 'AUTHENTICATING SESSION...'; $foot.Text = 'VERIFYING LOCAL STARTUP' }
             elseif ($elapsed -lt 8) { $status.Text = 'LOADING INTERFACE...'; $foot.Text = 'PREPARING PERFORMANCE TOOLS' }
             else { $status.Text = 'LAUNCHING APP...'; $foot.Text = 'STARTUP COMPLETE' }
-            if ($global:FrenzySplashReady -and $elapsed -ge 10) {
-                $global:FrenzySplashTimer.Stop()
-                # Hide/dispose only the splash; never close the PowerShell host or main form.
-                $splashToClose = $global:FrenzySplashForm
-                $global:FrenzySplashForm = $null
-                try { $splashToClose.TopMost = $false; $splashToClose.Hide(); $splashToClose.Dispose() } catch {}
-                try {
-                    if ($script:Form -and -not $script:Form.IsDisposed) {
-                        if (-not $script:Form.Visible) { $script:Form.Show() }
-                        $script:Form.WindowState = [Windows.Forms.FormWindowState]::Normal
-                        $script:Form.Activate()
-                        [Fz.Native]::Foreground($script:Form.Handle)
-                    }
-                } catch {}
-            }
-        })
-        $sf.Show(); $sf.Refresh(); $global:FrenzySplashTimer.Start()
-
-        # Complete the splash BEFORE building/showing the main application.
-        # Pump WinForms events so the animation and progress text keep updating.
-        while ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed -and
-               (([DateTime]::UtcNow - $global:FrenzySplashStarted).TotalSeconds -lt 10)) {
             [Windows.Forms.Application]::DoEvents()
             Start-Sleep -Milliseconds 25
         }
@@ -3114,18 +3094,21 @@ function Build-Games {
         $iniCard.Controls.Add((New-Lbl 'GAMEUSERSETTINGS.INI DETECTION' 22 12 420 22 $script:Fnt.Row $script:Clr.Text))
         $iniStatus = New-Lbl '' 22 40 650 36 $script:Fnt.Small $script:Clr.Dim; $iniStatus.AutoEllipsis = $true
         $iniCard.Controls.Add($iniStatus)
+        # Capture real Color objects before GetNewClosure changes the script scope.
+        $iniGoodColor = [Drawing.Color]::FromArgb(74, 222, 128)
+        $iniWarnColor = [Drawing.Color]::FromArgb(255, 193, 7)
         $refreshIni = {
             $path = Find-FnConfig
-            if ($path) { $iniStatus.Text = "FOUND: $path"; $iniStatus.ForeColor = $script:Clr.Good }
-            else { $iniStatus.Text = 'NOT FOUND. Launch Fortnite once, close it, then scan again or locate the file manually.'; $iniStatus.ForeColor = $script:Clr.Warn }
+            if ($path) { $iniStatus.Text = "FOUND: $path"; $iniStatus.ForeColor = $iniGoodColor }
+            else { $iniStatus.Text = 'NOT FOUND. Launch Fortnite once, close it, then scan again or locate the file manually.'; $iniStatus.ForeColor = $iniWarnColor }
         }.GetNewClosure()
         $scan = New-Btn 'SCAN / LOCATE INI' 190 36 $true $ac 'search'
         $scan.Location = New-Object Drawing.Point(680, 38)
         $scan.Add_Click({
             $path = Find-FnConfig
             if (-not $path) { $path = Find-FnConfig -Prompt }
-            if ($path) { $iniStatus.Text = "FOUND: $path"; $iniStatus.ForeColor = $script:Clr.Good }
-            else { $iniStatus.Text = 'NOT FOUND. Launch Fortnite once and try again.'; $iniStatus.ForeColor = $script:Clr.Warn }
+            if ($path) { $iniStatus.Text = "FOUND: $path"; $iniStatus.ForeColor = $iniGoodColor }
+            else { $iniStatus.Text = 'NOT FOUND. Launch Fortnite once and try again.'; $iniStatus.ForeColor = $iniWarnColor }
         }.GetNewClosure())
         $iniCard.Controls.Add($scan); $flow.Controls.Add($iniCard); & $refreshIni
     }
@@ -3255,7 +3238,10 @@ $script:Timer.Add_Tick({
     try { Update-Telemetry } catch { Log ('Telemetry update failed: ' + $_.Exception.Message) 'WARN' }
     finally { $script:TelemetryUpdating = $false }
 })
-$fm.Add_FormClosing({ $script:Timer.Stop() })
+$fm.Add_FormClosing({
+    try { if ($script:Timer) { $script:Timer.Stop() } } catch {}
+    try { if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop() } } catch {}
+})
 Log ("Loaded {0} tweaks. {1} detected ({2}). Laptop Guard: {3}." -f $script:Tweaks.Count, $(if ($script:Sys.IsLaptop) { 'Laptop' } else { 'Desktop' }), $script:Sys.Model, $(if ($script:Guard) { 'ON' } else { 'OFF' }))
 Log "State/backup: $script:StateFile"
 if (-not $script:HasNvidia) { Log 'No NVIDIA GPU detected - NVIDIA profile and GPU sensors are unavailable.' 'WARN' }
@@ -3303,4 +3289,8 @@ if ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed) {
     $global:FrenzySplashForm = $null
     try { $lastSplash.TopMost = $false; $lastSplash.Hide(); $lastSplash.Dispose() } catch {}
 }
-[void]$fm.ShowDialog()
+try { [void]$fm.ShowDialog() }
+finally {
+    try { if ($script:Timer) { $script:Timer.Stop(); $script:Timer.Dispose() } } catch {}
+    try { if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop(); $global:FrenzySplashTimer.Dispose(); $global:FrenzySplashTimer = $null } } catch {}
+}

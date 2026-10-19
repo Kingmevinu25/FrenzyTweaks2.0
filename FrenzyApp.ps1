@@ -1676,6 +1676,21 @@ if (-not $global:FrenzySplashForm) {
             }
         })
         $sf.Show(); $sf.Refresh(); $global:FrenzySplashTimer.Start()
+
+        # Complete the splash BEFORE building/showing the main application.
+        # Pump WinForms events so the animation and progress text keep updating.
+        while ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed -and
+               (([DateTime]::UtcNow - $global:FrenzySplashStarted).TotalSeconds -lt 10)) {
+            [Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 25
+        }
+        if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop() }
+        try {
+            $sf.TopMost = $false
+            $sf.Hide()
+            $sf.Dispose()
+        } catch {}
+        $global:FrenzySplashForm = $null
     } catch {
         # A splash-screen failure must never prevent the main app from opening.
         $global:FrenzySplashForm = $null

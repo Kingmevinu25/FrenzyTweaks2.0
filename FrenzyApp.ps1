@@ -36,14 +36,14 @@ namespace Fz
     {
         public static string Head = "Segoe UI";
         public static string Mono = "Consolas";
-        public static Color Bg = Color.FromArgb(8, 11, 21);
-        public static Color Side = Color.FromArgb(11, 15, 28);
-        public static Color Card = Color.FromArgb(18, 25, 43);
-        public static Color Card2 = Color.FromArgb(29, 39, 64);
-        public static Color Border = Color.FromArgb(40, 53, 84);
+        public static Color Bg = Color.FromArgb(16, 16, 21);
+        public static Color Side = Color.FromArgb(12, 11, 19);
+        public static Color Card = Color.FromArgb(27, 27, 37);
+        public static Color Card2 = Color.FromArgb(37, 29, 51);
+        public static Color Border = Color.FromArgb(62, 43, 78);
         public static Color Text = Color.FromArgb(240, 244, 255);
-        public static Color Dim = Color.FromArgb(138, 152, 184);
-        public static Color Accent = Color.FromArgb(255, 106, 0);
+        public static Color Dim = Color.FromArgb(159, 150, 173);
+        public static Color Accent = Color.FromArgb(168, 85, 247);
         public static Color Good = Color.FromArgb(74, 222, 128);
         public static Color Warn = Color.FromArgb(255, 200, 70);
         public static Color Bad = Color.FromArgb(255, 82, 82);
@@ -1550,13 +1550,13 @@ Add-Tweak $c 'Clear Fortnite DerivedDataCache' 'Rebuilds cleanly on next launch 
 function New-Rgb([int]$r, [int]$g, [int]$b) { return [Drawing.Color]::FromArgb($r, $g, $b) }
 $script:Clr = @{
     Bg = [Fz.Theme]::Bg; Side = [Fz.Theme]::Side; Card = [Fz.Theme]::Card; Card2 = [Fz.Theme]::Card2; Border = [Fz.Theme]::Border
-    Text = [Fz.Theme]::Text; Dim = [Fz.Theme]::Dim; Accent = [Fz.Theme]::Accent; AccentHi = (New-Rgb 255 152 48)
+    Text = [Fz.Theme]::Text; Dim = [Fz.Theme]::Dim; Accent = [Fz.Theme]::Accent; AccentHi = (New-Rgb 232 99 185)
     Good = [Fz.Theme]::Good; Warn = [Fz.Theme]::Warn; Bad = [Fz.Theme]::Bad
 }
 # every category has its own colour + icon
 $script:PageClr = @{
-    HOME = (New-Rgb 155 92 255); GENERAL = (New-Rgb 34 211 238); DEBLOAT = (New-Rgb 155 92 255); INPUT = (New-Rgb 255 210 63)
-    GPU = (New-Rgb 74 222 128); NETWORK = (New-Rgb 77 141 255); GAMES = (New-Rgb 155 92 255); CLEANUP = (New-Rgb 69 214 160); RESTORE = (New-Rgb 155 92 255)
+    HOME = (New-Rgb 168 85 247); GENERAL = (New-Rgb 168 85 247); DEBLOAT = (New-Rgb 168 85 247); INPUT = (New-Rgb 168 85 247)
+    GPU = (New-Rgb 168 85 247); NETWORK = (New-Rgb 168 85 247); GAMES = (New-Rgb 168 85 247); CLEANUP = (New-Rgb 168 85 247); RESTORE = (New-Rgb 168 85 247)
 }
 $script:PageIcon = @{ HOME = 'home'; GENERAL = 'sliders'; DEBLOAT = 'trash'; INPUT = 'bolt'; GPU = 'chip'; NETWORK = 'globe'; GAMES = 'game'; CLEANUP = 'trash'; RESTORE = 'undo' }
 $script:Acc = $script:Clr.Accent
@@ -2797,20 +2797,37 @@ function Build-Home {
     $flow = $script:Pages['HOME'].Flow; $script:H = @{}; $ac = $script:PageClr.HOME
     $hero = New-Object Fz.FzHero; $hero.Name = 'full'; $hero.Height = 176; $hero.Width = 900; $hero.Accent = $ac; $hero.Margin = New-Object Windows.Forms.Padding(0, 0, 12, 12)
     $hero.Controls.Add((New-Lbl "// SYSTEM ONLINE" 38 22 400 18 $script:Fnt.MonoB $ac))
-    $hero.Controls.Add((New-Lbl 'FRENZY TWEAKS' 34 40 700 70 $script:Fnt.Hero $script:Clr.Text))
+    $hero.Controls.Add((New-Lbl 'Welcome to FRENZY TWEAKS' 34 40 760 70 $script:Fnt.Hero $script:Clr.Text))
     # Premium brand accent: crisp, high-contrast typography without expensive animation.
-    $hero.Controls.Add((New-Lbl 'ULTIMATE GAMING OPTIMIZATION' 38 91 480 17 $script:Fnt.MonoB $script:Clr.Dim))
+    $hero.Controls.Add((New-Lbl 'YOUR GAMING PERFORMANCE CONTROL CENTER' 38 91 480 17 $script:Fnt.MonoB $script:Clr.Dim))
     $script:H.Count = New-Lbl '' 38 108 420 20 $script:Fnt.MonoB $ac; $hero.Controls.Add($script:H.Count)
     $chip = ("{0}   |   {1}   |   {2}   |   {3} GB RAM" -f $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $script:Sys.Cpu, $script:GpuShort, $script:Sys.RamGB)
     $cl = New-Lbl $chip 38 134 620 20 $script:Fnt.Small $script:Clr.Dim; $cl.AutoEllipsis = $true; $hero.Controls.Add($cl)
-    $script:H.BtnRec = New-Btn 'APPLY RECOMMENDATIONS' 300 46 $true $ac 'bolt'; $script:H.BtnRec.Top = 38
+    $script:H.BtnRec = New-Btn 'APPLY SELECTED TWEAKS' 300 46 $true $ac 'bolt'; $script:H.BtnRec.Top = 38
     $script:H.BtnRec.Add_Click({ $r = @(Get-RecommendedPending); Invoke-Run @($r | ForEach-Object { $_.T }) @() })
     $bRp = New-Btn 'CREATE RESTORE POINT' 300 40 $false $ac 'shield'; $bRp.Top = 96; $bRp.Add_Click({ New-RestorePoint })
     $hero.Controls.Add($script:H.BtnRec); $hero.Controls.Add($bRp)
     $hero.Tag = @($script:H.BtnRec, $bRp); $hero.Add_Resize({ foreach ($b in $this.Tag) { $b.Left = $this.Width - 330 } }); $hero.Width = 901
     $flow.Controls.Add($hero)
 
-    $flow.Controls.Add((New-Section 'LIVE TELEMETRY  /  5-SECOND REFRESH' $ac))
+    # Hardware cards match the clean four-column overview in the reference UI.
+    $flow.Controls.Add((New-Section 'HARDWARE OVERVIEW' $ac))
+    $hardwareCards = @(
+        @('PROCESSOR', $script:Sys.Cpu, 'Installed CPU'),
+        @('GRAPHICS', $script:GpuShort, 'Installed GPU'),
+        @('MEMORY', ('{0} GB' -f $script:Sys.RamGB), 'System RAM'),
+        @('DEVICE', $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $script:Sys.Model)
+    )
+    foreach ($item in $hardwareCards) {
+        $hc = New-Card 248 110 'quarter' $ac; $hc.Stripe = $true
+        $hc.Controls.Add((New-Lbl $item[0] 16 12 235 18 $script:Fnt.Tiny $ac))
+        $hv = New-Lbl $item[1] 16 40 210 26 $script:Fnt.Row $script:Clr.Text; $hv.AutoEllipsis = $true
+        $hs = New-Lbl $item[2] 16 78 210 18 $script:Fnt.Tiny $script:Clr.Good; $hs.AutoEllipsis = $true
+        $hc.Controls.AddRange(@($hv, $hs))
+        $hc.Add_Resize({ foreach ($v in $this.Controls) { if ($v -is [Windows.Forms.Label]) { $v.Width = $this.Width - 32 } } })
+        $flow.Controls.Add($hc)
+    }
+    $flow.Controls.Add((New-Section 'PERFORMANCE MONITOR  /  5-SECOND REFRESH' $ac))
     $script:Tiles.cpu = New-Tile 'CPU' (New-Rgb 255 106 0); $script:Tiles.gpu = New-Tile 'GPU' (New-Rgb 74 222 128)
     $script:Tiles.mem = New-Tile 'MEMORY' (New-Rgb 77 141 255); $script:Tiles.net = New-Tile 'NETWORK' (New-Rgb 168 85 247)
     foreach ($k in 'cpu', 'gpu', 'mem', 'net') { $flow.Controls.Add($script:Tiles[$k].Panel) }
@@ -2919,7 +2936,7 @@ function Build-Gpu {
         $card.Controls.Add((New-Lbl 'USE A FORTNITE GAME PROFILE, NOT GLOBAL SETTINGS' 22 14 820 24 $script:Fnt.Row $script:Clr.Text))
         $steps = @(
             '1. Download NVIDIA Profile Inspector from the official GitHub releases and extract the ZIP.',
-            '2. Get the Comp_Fortnite_Profile.nip file using the button below (or use your trusted copy).',
+            '2. Click DOWNLOAD COMP PROFILE, select a folder, and save the bundled .nip file.',
             '3. Open nvidiaProfileInspector.exe. Open the profile selector/search at the top and search for Fortnite.',
             '4. Select the Fortnite profile (not Global Profile), then drag Comp_Fortnite_Profile.nip onto the inspector window.',
             '5. Review the imported settings and click Apply changes. Export/back up your current profile first if you may want to undo it.'
@@ -2929,13 +2946,24 @@ function Build-Gpu {
         $download = New-Btn 'OPEN OFFICIAL DOWNLOADS' 240 36 $true $ac 'arrow'
         $download.Location = New-Object Drawing.Point(22, 202)
         $download.Add_Click({ Start-Process 'https://github.com/Orbmu2k/nvidiaProfileInspector/releases' })
-        $profile = New-Btn 'EXTRACT / SHOW COMP PROFILE' 260 36 $false $ac 'folder'
+        $profile = New-Btn 'DOWNLOAD COMP PROFILE' 260 36 $false $ac 'folder'
         $profile.Location = New-Object Drawing.Point(276, 202)
         $profile.Add_Click({
+            $save = New-Object System.Windows.Forms.SaveFileDialog
             try {
-                $nip = Find-Nip
-                if (Test-Path -LiteralPath $nip) { Start-Process explorer.exe -ArgumentList "/select,`"$nip`"" }
-            } catch { Log "Could not prepare Comp Fortnite profile: $($_.Exception.Message)" 'ERROR' }
+                $save.Title = 'Save Fortnite NVIDIA profile'
+                $save.FileName = 'Comp_Fortnite_Profile.nip'
+                $save.Filter = 'NVIDIA Profile Inspector (*.nip)|*.nip'
+                $save.DefaultExt = 'nip'
+                $save.AddExtension = $true
+                $save.OverwritePrompt = $true
+                if ($save.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+                $bytes = [Convert]::FromBase64String($script:NipB64)
+                [System.IO.File]::WriteAllBytes($save.FileName, $bytes)
+                Log "Saved Comp Fortnite profile to $($save.FileName)" 'SUCCESS'
+                [System.Windows.Forms.MessageBox]::Show('Profile saved. Open NVIDIA Profile Inspector, select the Fortnite game profile, import the .nip, review settings, and apply changes.', 'FRENZY TWEAKS', 'OK', 'Information') | Out-Null
+            } catch { Log "Could not save Comp Fortnite profile: $($_.Exception.Message)" 'ERROR' }
+            finally { $save.Dispose() }
         })
         $card.Controls.Add($download); $card.Controls.Add($profile); $flow.Controls.Add($card)
         $note = New-Card 900 68 'full' $script:Clr.Warn
@@ -3176,7 +3204,7 @@ $fm.StartPosition = 'CenterScreen'; $fm.BackColor = $script:Clr.Bg; $fm.ForeColo
 $topBar = New-Object Windows.Forms.Panel; $topBar.Dock = 'Top'; $topBar.Height = 58; $topBar.BackColor = $script:Clr.Side
 $tbLogo = New-LogoBox 34 $script:Clr.Side; $tbLogo.Location = New-Object Drawing.Point(16, 12); $topBar.Controls.Add($tbLogo)
 $topBar.Controls.Add((New-Wordmark 60 17 21 2.5 $script:Clr.Side))
-$brandSub = New-Lbl 'GAMING PERFORMANCE SUITE' 62 40 260 12 $script:Fnt.Tiny $script:Clr.Dim
+$brandSub = New-Lbl 'PREMIUM PERFORMANCE SUITE' 62 40 260 12 $script:Fnt.Tiny $script:Clr.Dim
 $topBar.Controls.Add($brandSub)
 # Compact status breadcrumb, integrated into the header without a popup.
 $script:ActivePageNotice = New-Lbl 'OPEN  /  HOME' 348 21 220 20 $script:Fnt.MonoB ([Drawing.Color]::FromArgb(160,125,255))
@@ -3203,15 +3231,15 @@ function Add-NavBtn([string]$Key, [string]$Text, [string]$Badge) {
     $b.Tag = $Key; $b.Add_Click({ Show-Page $this.Tag }); $nav.Controls.Add($b); $script:NavButtons[$Key] = $b
 }
 Add-NavLabel 'CORE'
-Add-NavBtn 'HOME' 'Home' ''
+Add-NavBtn 'HOME' 'Dashboard' ''
 Add-NavBtn 'GAMES' 'Fortnite' ([string](Get-PageTweaks 'GAMES').Count)
 Add-NavLabel 'TWEAKS'
 Add-NavBtn 'GENERAL' 'General' ([string](Get-PageTweaks 'GENERAL').Count)
 Add-NavBtn 'DEBLOAT' 'Debloat' ''
 Add-NavBtn 'RESTORE' 'Restore Center' ''
 Add-NavBtn 'INPUT' 'Input Delay' ([string](Get-PageTweaks 'INPUT').Count)
-Add-NavBtn 'GPU' 'GPU' ([string](Get-PageTweaks 'GPU').Count)
-Add-NavBtn 'NETWORK' 'Networking' ([string](Get-PageTweaks 'NETWORK').Count)
+Add-NavBtn 'GPU' 'GPU & CPU' ([string](Get-PageTweaks 'GPU').Count)
+Add-NavBtn 'NETWORK' 'Network' ([string](Get-PageTweaks 'NETWORK').Count)
 $sideBot = New-Object Windows.Forms.Panel; $sideBot.Dock = 'Bottom'; $sideBot.Height = 136; $sideBot.BackColor = $script:Clr.Side
 $dev = New-Object Fz.FzCard; $dev.Location = New-Object Drawing.Point(14, 6); $dev.Size = New-Object Drawing.Size(216, 40); $dev.Icon = 'chip'; $dev.Accent = $script:PageClr.GPU; $dev.Radius = 10; $dev.Hover = $false
 $script:DevLbl = New-Lbl ('{0}   Guard {1}' -f $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $(if ($script:Guard) { 'ON' } else { 'OFF' })) 44 11 170 18 $script:Fnt.Tiny $script:Clr.Text

@@ -1087,6 +1087,31 @@ function Find-NPI {
 }
 
 # ---------- GameUserSettings.ini editing ----------
+function Find-FnConfig([switch]$Prompt) {
+    $candidates = @(
+        $script:FnCfg,
+        (Join-Path $env:LOCALAPPDATA 'FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini'),
+        (Join-Path $env:LOCALAPPDATA 'FortniteGame\Saved\Config\WindowsClientEditor\GameUserSettings.ini')
+    ) | Where-Object { $_ }
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $script:FnCfg = $candidate; return $candidate }
+    }
+    $root = Join-Path $env:LOCALAPPDATA 'FortniteGame\Saved\Config'
+    if (Test-Path -LiteralPath $root -PathType Container) {
+        try {
+            $found = Get-ChildItem -LiteralPath $root -Filter 'GameUserSettings.ini' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $script:FnCfg = $found.FullName; return $found.FullName }
+        } catch {}
+    }
+    if ($Prompt) {
+        $dlg = New-Object Windows.Forms.OpenFileDialog
+        $dlg.Title = 'Select Fortnite GameUserSettings.ini'
+        $dlg.Filter = 'GameUserSettings.ini|GameUserSettings.ini|INI files (*.ini)|*.ini'
+        $dlg.FileName = 'GameUserSettings.ini'
+        if ($dlg.ShowDialog() -eq 'OK') { $script:FnCfg = $dlg.FileName; return $dlg.FileName }
+    }
+    return $null
+}
 function Get-IniSection($lines, [string]$section) {
     $keys = New-Object System.Collections.ArrayList; $sec = -1; $in = $false
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -1129,7 +1154,8 @@ function Undo-IniRule($lines, [string]$section, $r) {
     Save-State
 }
 function Read-FnIni {
-    if (-not (Test-Path $script:FnCfg)) { throw "GameUserSettings.ini not found at $script:FnCfg - launch Fortnite once first." }
+    $cfg = Find-FnConfig
+    if (-not $cfg) { throw 'GameUserSettings.ini was not detected. Launch Fortnite once, close it, then use SCAN / LOCATE INI on the Fortnite page.' }
     if (Get-Process -Name 'FortniteClient-Win64-Shipping' -ErrorAction SilentlyContinue) { throw 'Close Fortnite first - it overwrites its config on exit.' }
     $fi = Get-Item $script:FnCfg; if ($fi.IsReadOnly) { $fi.IsReadOnly = $false; Log 'Cleared read-only flag on config' }
     $l = New-Object 'System.Collections.Generic.List[string]'
@@ -2104,7 +2130,8 @@ function Test-TweakActive($t) {
 
 # ---------- Where does each tweak live in the UI ----------
 $script:GroupOrder = @{
-    GENERAL = @('CLEANUP & SHELL', 'PRIVACY', 'NOTIFICATIONS & SURFACES', 'DIAGNOSTICS & BACKGROUND', 'OPTIONAL WINDOWS FEATURES')
+    GENERAL = @('PRIVACY', 'NOTIFICATIONS & SURFACES', 'DIAGNOSTICS & BACKGROUND', 'OPTIONAL WINDOWS FEATURES')
+    DEBLOAT = @('CLEANUP & SHELL')
     INPUT   = @('PRIORITY & SCHEDULING', 'INPUT HARDWARE', 'BACKGROUND SERVICES', 'GAME SURFACES & OVERLAYS', 'COMPANION APPS')
     GPU     = @('POWER & PCIE')
     NETWORK = @('NETWORK TWEAKS', 'ADVANCED (EXPERT)')
@@ -2122,7 +2149,7 @@ function Get-TweakPlace($t) {
     if ($script:InputMap.ContainsKey($t.Name)) { return @('INPUT', $script:InputMap[$t.Name]) }
     if ($t.Name -eq 'Disable PowerShell 7 Telemetry') { return @('GENERAL', 'DIAGNOSTICS & BACKGROUND') }
     switch -Wildcard ($t.Cat) {
-        '1.*' { return @('GENERAL', 'CLEANUP & SHELL') }
+        '1.*' { return @('DEBLOAT', 'CLEANUP & SHELL') }
         '2.*' { return @('GENERAL', 'PRIVACY') }
         '3.*' { return @('GENERAL', 'NOTIFICATIONS & SURFACES') }
         '4.*' { return @('GENERAL', 'DIAGNOSTICS & BACKGROUND') }
@@ -2569,6 +2596,19 @@ function Show-AppsDialog {
 # ---------- Services ----------
 # ---------- Services ----------
 $script:SvcGroups = @(
+    @{ G = 'Telemetry / optional background'; S = @(
+        @{ N = 'DiagTrack'; D = 'Connected User Experiences and Telemetry. Disabling reduces diagnostic collection, not guaranteed FPS.'; R = $true },
+        @{ N = 'dmwappushservice'; D = 'WAP push message routing; optional on many gaming PCs.'; R = $true },
+        @{ N = 'MapsBroker'; D = 'Downloaded Maps Manager; disable only if you never use offline maps.'; R = $false },
+        @{ N = 'stisvc'; D = 'Windows Image Acquisition; needed for some scanners/cameras.'; R = $false }) }
+    @{ G = 'Optional services (test before disabling)'; S = @(
+        @{ N = 'WSearch'; D = 'Windows Search indexing; can make searches slower if disabled.'; R = $false },
+        @{ N = 'SysMain'; D = 'Prefetch/SysMain; effect varies by drive and workload; leave enabled unless testing shows a benefit.'; R = $false }) }
+    @{ G = 'Xbox integrations (keep if using Xbox / Game Pass features)'; S = @(
+        @{ N = 'XblAuthManager'; D = 'Xbox Live authentication; may affect Xbox-linked logins.'; R = $false },
+        @{ N = 'XblGameSave'; D = 'Xbox cloud saves; disabling can affect saves.'; R = $false },
+        @{ N = 'XboxGipSvc'; D = 'Xbox accessory support.'; R = $false },
+        @{ N = 'XboxNetApiSvc'; D = 'Xbox networking / multiplayer integration.'; R = $false }) }
     @{ G = 'System maintenance'; S = @(@{ N = 'QWAVE'; D = 'Quality Windows Audio/Video Experience (streaming QoS)'; R = $false }) }
     @{ G = 'Remote Desktop & VPN'; S = @(@{ N = 'RasMan'; D = 'Remote Access Connection Manager - breaks built-in VPN'; R = $false }) }
     @{ G = 'Notifications'; S = @(@{ N = 'WpnService'; D = 'Windows Push Notifications System Service (leave default)'; R = $false }, @{ N = 'WpnUserService'; D = 'Push notifications user service (leave default)'; R = $false }) }
@@ -2614,7 +2654,7 @@ function Show-ServicesDialog {
 # ---------- Scheduled tasks ----------
 # ---------- Scheduled tasks ----------
 $script:TaskGroups = @(
-    @{ G = 'Telemetry & diagnostics'; R = $false; T = @(
+    @{ G = 'Telemetry & diagnostics (optional)'; R = $true; T = @(
             @('Compatibility appraiser', '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser'), @('Program data updater', '\Microsoft\Windows\Application Experience\ProgramDataUpdater'),
             @('Startup app task', '\Microsoft\Windows\Application Experience\StartupAppTask'), @('Customer experience reporting', '\Microsoft\Windows\Customer Experience Improvement Program\Consolidator'),
             @('USB usage reporting', '\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip'), @('Disk diagnostics collector', '\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector'),
@@ -2827,12 +2867,23 @@ function Build-Debloat {
     $p = New-PageShell 'DEBLOAT' 'DEBLOAT' 'Review optional apps, services, scheduled tasks and temporary files. Windows essentials stay protected.' 112
     $flow = $script:Pages['DEBLOAT'].Flow
     $flow.Controls.Add((New-HubCard 'Optional Apps' 'See every removable app on this PC. Tick the ones you want gone - glowing tiles show your selection - and confirm before anything is uninstalled.' 'REVIEW APPS' { Show-AppsDialog } (New-Rgb 255 61 139) 'apps'))
-    $flow.Controls.Add((New-HubCard 'Optional Services' 'Disable reviewed non-core services. The original startup mode is saved and can be re-enabled any time.' 'REVIEW SERVICES' { Show-ServicesDialog } (New-Rgb 255 150 40) 'gear'))
-    $flow.Controls.Add((New-HubCard 'Scheduled Tasks' 'Pause reviewed background jobs (telemetry, maintenance, sync). Exact task paths shown; restorable.' 'REVIEW TASKS' { Show-TasksDialog } (New-Rgb 255 210 63) 'clock'))
+    $flow.Controls.Add((New-HubCard 'Optional Services' 'Review optional services only. Do not disable audio, network, Windows Security/Update, GPU-driver, or anti-cheat services; original startup modes are saved.' 'REVIEW SERVICES' { Show-ServicesDialog } (New-Rgb 255 150 40) 'gear'))
+    $flow.Controls.Add((New-HubCard 'Scheduled Tasks' 'Recommended selection covers optional diagnostics/telemetry only. Keep Windows Update, security, anti-cheat and game-related tasks enabled; changes are restorable.' 'REVIEW TASKS' { Show-TasksDialog } (New-Rgb 255 210 63) 'clock'))
     $flow.Controls.Add((New-HubCard 'App Cache Cleanup' 'Clean Discord, Steam, Epic Launcher and temporary caches. Select items and review size before deleting.' 'OPEN APP CACHES' { Show-AppCacheCleanup } (New-Rgb 168 85 247) 'trash'))
     $flow.Controls.Add((New-HubCard 'Disk Cleanup' 'Find temporary files and caches you can remove. Shows exact sizes first; risky items are marked for review.' 'OPEN CLEANUP' { Show-DiskCleanup } (New-Rgb 74 222 128) 'trash'))
     $flow.Controls.Add((New-HubCard 'Windows Security' 'Core Windows components stay protected. Optionally exclude only the Fortnite folder from real-time scanning.' 'ADD FORTNITE EXCLUSION' { Invoke-Run @((Get-TweakByName 'Fortnite: Defender folder exclusion')) @() } (New-Rgb 34 211 238) 'shield'))
     $flow.Controls.Add((New-HubCard 'Remove Exclusion' 'Removes the Fortnite folder exclusion this tool added, restoring full real-time scanning of that folder.' 'REMOVE EXCLUSION' { Invoke-Run @() @((Get-TweakByName 'Fortnite: Defender folder exclusion')) } (New-Rgb 168 85 247) 'undo'))
+    $last = $null
+    foreach ($it in (Get-PageTweaks 'DEBLOAT')) {
+        if ($it.Group -ne $last) { Add-GroupHeader $flow 'DEBLOAT' $it.Group; $last = $it.Group }
+        [void](Add-TweakRow $flow $it.T 'DEBLOAT' $it.Group)
+    }
+    $foot = New-Object Windows.Forms.Panel; $foot.Dock = 'Bottom'; $foot.Height = 58; $foot.BackColor = $script:Clr.Side
+    $fl = New-Lbl 'Review selected changes before applying. Security updates are best left enabled.' 30 19 800 22 $script:Fnt.Small $script:Clr.Dim
+    $fbp = New-Object Windows.Forms.Panel; $fbp.Dock = 'Right'; $fbp.Width = 220; $fbp.BackColor = $script:Clr.Side
+    $fb = New-Btn 'APPLY CHANGES' 190 38 $true $script:PageClr.DEBLOAT 'check'; $fb.Location = New-Object Drawing.Point(8, 10); $fb.Add_Click({ Invoke-PagePending 'DEBLOAT' })
+    $fbp.Controls.Add($fb); $foot.Controls.Add($fl); $foot.Controls.Add($fbp); $p.Controls.Add($foot)
+    $script:Pages['DEBLOAT'].FooterLbl = $fl
     return $p
 }
 
@@ -2845,54 +2896,6 @@ function Update-GpuPower {
     $adj = ($null -ne $g.PowerMax -and $null -ne $g.PowerLimit -and $null -ne $g.PowerMin -and $g.PowerMax -gt $g.PowerMin -and $g.PowerLimit -lt $g.PowerMax)
     $w.Msg.Text = if ($adj) { 'The driver allows a higher power limit. It resets on reboot or driver restart.' } elseif ($null -eq $g.PowerMax) { 'The driver does not expose a power limit for this GPU.' } else { 'The driver does not expose an adjustable power-limit range for this GPU (common on laptops - the OEM fixes it).' }
     $w.Btn.Enabled = $adj; $w.Btn.Text = $(if ($adj) { 'SET TO MAXIMUM' } else { 'UNAVAILABLE' }); $w.Btn.Tag = $g
-}
-$script:NvNames = @{
-    '390467' = @('Low Latency Mode (profile value 2)', 'Driver low-latency queue setting from your profile; use together with in-game Reflex.')
-    '1686376' = @('Texture filtering: negative LOD bias = clamp', 'Stops negative-LOD shimmering.')
-    '3070157' = @('Image sharpening: off', 'No driver sharpening override.'); '3070158' = @('Sharpening denoising factor: 0', 'Companion to sharpening.')
-    '6505105' = @('DLSS model preset: default', 'No forced DLSS preset.'); '6600001' = @('Preferred refresh rate (profile value 0)', 'As stored in your profile.')
-    '8102046' = @('Max pre-rendered frames = 1', 'Short CPU render queue for lower input latency.'); '8703344' = @('Anisotropic filter optimization: on', 'Slightly cheaper anisotropic sampling.')
-    '11041231' = @('Vertical Sync: force off', 'Lowest presentation latency (tearing allowed).'); '11306135' = @('Shader disk cache size', 'Large persistent shader cache for fewer stutters.')
-    '273507943' = @('DLSS-FG multi-frame override: 0', 'No frame-generation override (generated frames add latency).'); '274197361' = @('Power management: prefer maximum performance', 'Keeps GPU clocks high while Fortnite runs (more heat on laptops).')
-    '276158834' = @('Ansel: off', 'Disables NVIDIA Ansel hooks.'); '276652957' = @('Antialiasing gamma correction (profile value)', 'As stored in your profile.')
-    '276757595' = @('Antialiasing mode: application controlled', 'No driver AA override.'); '277041152' = @('Frame-rate limiter low-latency mode', 'Driver low-latency path from your profile.')
-    '278196567' = @('VRR global feature: off', 'Matches uncapped, tearing-allowed play.'); '278196727' = @('VRR requested state: off', 'Companion VRR setting.')
-    '282245910' = @('Anisotropic filtering mode: user-defined', 'Lets the application choose.'); '283385329' = @('DLSS-FG preset override: off', 'No override.')
-    '283385347' = @('DLSS-FG override: off', 'No override.'); '294973784' = @('G-SYNC globally: off', 'Fortnite profile runs without G-SYNC.')
-}
-function Get-NipSettings {
-    $nip = Find-Nip; $raw = Get-Content -LiteralPath $nip -Raw
-    $out = New-Object System.Collections.ArrayList
-    foreach ($m in [regex]::Matches($raw, '(?s)<ProfileSetting>.*?</ProfileSetting>')) {
-        $id = [regex]::Match($m.Value, '<SettingID>(\d+)</SettingID>').Groups[1].Value
-        $nm = ([regex]::Match($m.Value, '<SettingNameInfo>(.*?)</SettingNameInfo>').Groups[1].Value).Trim()
-        $val = [regex]::Match($m.Value, '<SettingValue>(\d+)</SettingValue>').Groups[1].Value
-        $pair = $script:NvNames[$id]
-        $title = if ($pair) { $pair[0] } elseif ($nm) { $nm } else { "NVIDIA setting $id" }
-        $desc = if ($pair) { $pair[1] } else { '' }
-        [void]$out.Add([pscustomobject]@{ Id = $id; Title = $title; Desc = "$desc   [ID $id = $val]" })
-    }
-    return @($out)
-}
-function Invoke-NvApply {
-    if (-not $script:HasNvidia) { [void][Fz.Msg]::Show('No NVIDIA GPU detected.', 'NVIDIA'); return }
-    $ids = @($script:NvRows | Where-Object { $_.Chk.Checked } | ForEach-Object { $_.Id })
-    if ($ids.Count -eq 0) { return }
-    if ($script:chkDry.Checked) { Log "[DRY RUN] would import $($ids.Count) NVIDIA profile settings"; return }
-    if ([Fz.Msg]::Show("Import $($ids.Count) setting(s) into the NVIDIA 'Fortnite' profile (not your global profile)?", 'NVIDIA profile', 'YesNo', 'Question') -ne 'Yes') { return }
-    if ($script:chkRP.Checked -and -not $script:RPDone) { New-RestorePoint }
-    try {
-        $src = Get-Content -LiteralPath (Find-Nip) -Raw; $keep = $ids
-        $txt = [regex]::Replace($src, '(?s)\s*<ProfileSetting>.*?</ProfileSetting>', ([Text.RegularExpressions.MatchEvaluator]({ param($m) $id = [regex]::Match($m.Value, '<SettingID>(\d+)</SettingID>').Groups[1].Value; if ($keep -contains $id) { $m.Value } else { '' } }.GetNewClosure())))
-        $custom = Join-Path $script:Dir 'Custom_Fortnite_Profile.nip'
-        [IO.File]::WriteAllText($custom, $txt, (New-Object Text.UTF8Encoding($true)))
-        $npi = Find-NPI; if (-not $npi) { throw 'NVIDIA Profile Inspector not available.' }
-        $pr = Start-Process -FilePath $npi -ArgumentList "-silentImport `"$custom`"" -Wait -PassThru
-        Log "Profile Inspector exit code: $($pr.ExitCode)"
-        if ($pr.ExitCode -ne 0) { throw "NVIDIA Profile Inspector import failed with exit code $($pr.ExitCode). Settings were not marked as applied." }
-        foreach ($i in $ids) { $script:State["nv:$i"] = $true }; Save-State
-        foreach ($r in $script:NvRows) { if ($script:State.ContainsKey("nv:$($r.Id)")) { $r.Status.Text = "$DOT APPLIED"; $r.Status.ForeColor = $script:Clr.Good } }
-    } catch { Log "NVIDIA import failed: $($_.Exception.Message)" 'ERROR' }
 }
 function Build-Gpu {
     $pre = { param($flow)
@@ -2917,27 +2920,35 @@ function Build-Gpu {
     }
     $post = { param($flow)
         $ac = $script:PageClr.GPU
-        $flow.Controls.Add((New-Section 'NVIDIA PROFILE (applied to the Fortnite profile only)' $ac))
-        $script:NvRows = New-Object System.Collections.ArrayList
-        if (-not $script:HasNvidia) {
-            $n = New-Card 900 54 'full' $script:Clr.Warn; $n.Controls.Add((New-Lbl 'No NVIDIA GPU detected - NVIDIA profile settings are unavailable on this PC.' 22 16 800 20 $script:Fnt.Norm $script:Clr.Warn)); $flow.Controls.Add($n); return
-        }
-        foreach ($s in (Get-NipSettings)) {
-            $row = New-Card 480 84 'half' $ac
-            $chk = New-Object Fz.FzToggle; $chk.OnColor = $ac; $chk.Top = 12; $chk.Checked = $true; $row.Lit = $true
-            $chk.Tag = $row; $chk.Add_CheckedChanged({ $this.Tag.Lit = $this.Checked })
-            $st = New-Lbl '' 0 60 160 16 $script:Fnt.Tiny $script:Clr.Dim; $st.TextAlign = 'MiddleRight'
-            if ($script:State.ContainsKey("nv:$($s.Id)")) { $st.Text = "$DOT APPLIED"; $st.ForeColor = $script:Clr.Good } else { $st.Text = 'NOT APPLIED' }
-            $nl = New-Lbl $s.Title 18 12 380 22 $script:Fnt.Row $script:Clr.Text; $nl.AutoEllipsis = $true
-            $dl = New-Lbl $s.Desc 18 36 440 22 $script:Fnt.Small $script:Clr.Dim; $dl.AutoEllipsis = $true
-            $row.Controls.AddRange(@($nl, $dl, $st, $chk)); $row.Tag = @($chk, $nl, $dl, $st)
-            $row.Add_Resize({ $t = $this.Tag; $t[0].Left = $this.Width - 62; $t[1].Width = $this.Width - 100; $t[2].Width = $this.Width - 36; $t[3].Left = $this.Width - 176 }); $row.Width = 481
-            $flow.Controls.Add($row); [void]$script:NvRows.Add([pscustomobject]@{ Id = $s.Id; Chk = $chk; Status = $st })
-        }
-        $bn = New-Btn 'APPLY SELECTED NVIDIA SETTINGS' 340 40 $true $ac 'bolt'; $bn.Margin = New-Object Windows.Forms.Padding(0, 8, 12, 0); $bn.Add_Click({ Invoke-NvApply }); $flow.Controls.Add($bn)
-        $hint = New-Lbl 'To revert: open NVIDIA Profile Inspector, select the Fortnite profile and choose Restore profile to defaults.' 0 0 800 22 $script:Fnt.Small $script:Clr.Dim; $hint.Name = 'full'; $hint.Margin = New-Object Windows.Forms.Padding(0, 14, 0, 0); $flow.Controls.Add($hint)
+        $flow.Controls.Add((New-Section 'NVIDIA PROFILE INSPECTOR - MANUAL IMPORT' $ac))
+        $card = New-Card 900 245 'full' $ac; $card.Stripe = $true
+        $card.Controls.Add((New-Lbl 'USE A FORTNITE GAME PROFILE, NOT GLOBAL SETTINGS' 22 14 820 24 $script:Fnt.Row $script:Clr.Text))
+        $steps = @(
+            '1. Download NVIDIA Profile Inspector from the official GitHub releases and extract the ZIP.',
+            '2. Get the Comp_Fortnite_Profile.nip file using the button below (or use your trusted copy).',
+            '3. Open nvidiaProfileInspector.exe. Open the profile selector/search at the top and search for Fortnite.',
+            '4. Select the Fortnite profile (not Global Profile), then drag Comp_Fortnite_Profile.nip onto the inspector window.',
+            '5. Review the imported settings and click Apply changes. Export/back up your current profile first if you may want to undo it.'
+        )
+        $yy = 44
+        foreach ($step in $steps) { $card.Controls.Add((New-Lbl ($DOT + '  ' + $step) 22 $yy 840 24 $script:Fnt.Small $script:Clr.Dim)); $yy += 30 }
+        $download = New-Btn 'OPEN OFFICIAL DOWNLOADS' 240 36 $true $ac 'arrow'
+        $download.Location = New-Object Drawing.Point(22, 202)
+        $download.Add_Click({ Start-Process 'https://github.com/Orbmu2k/nvidiaProfileInspector/releases' })
+        $profile = New-Btn 'EXTRACT / SHOW COMP PROFILE' 260 36 $false $ac 'folder'
+        $profile.Location = New-Object Drawing.Point(276, 202)
+        $profile.Add_Click({
+            try {
+                $nip = Find-Nip
+                if (Test-Path -LiteralPath $nip) { Start-Process explorer.exe -ArgumentList "/select,`"$nip`"" }
+            } catch { Log "Could not prepare Comp Fortnite profile: $($_.Exception.Message)" 'ERROR' }
+        })
+        $card.Controls.Add($download); $card.Controls.Add($profile); $flow.Controls.Add($card)
+        $note = New-Card 900 68 'full' $script:Clr.Warn
+        $note.Controls.Add((New-Lbl 'Profile settings can vary by driver and hardware. Avoid applying a .nip to Global Profile unless you intentionally want the settings system-wide.' 22 14 840 40 $script:Fnt.Small $script:Clr.Warn))
+        $flow.Controls.Add($note)
     }
-    return (Build-TweakPage 'GPU' 'GPU' 'Sensors, power limit, PCIe power saving, scheduling and the Fortnite NVIDIA profile.' $pre $post)
+    return (Build-TweakPage 'GPU' 'GPU' 'Sensors, power limit, PCIe power saving, scheduling and manual Fortnite profile import guidance.' $pre $post)
 }
 
 # ---------- Network ----------
@@ -3099,24 +3110,29 @@ function Build-Games {
             'Close Fortnite before applying config tweaks - the game rewrites its settings file when it exits')
         $y = 44; foreach ($t in $tips) { $l = New-Lbl ($DOT + '  ' + $t) 22 $y 1000 20 $script:Fnt.Small $script:Clr.Dim; $gc.Controls.Add($l); $y += 26 }
         $flow.Controls.Add($gc)
+        $iniCard = New-Card 900 112 'full' $ac; $iniCard.Stripe = $true
+        $iniCard.Controls.Add((New-Lbl 'GAMEUSERSETTINGS.INI DETECTION' 22 12 420 22 $script:Fnt.Row $script:Clr.Text))
+        $iniStatus = New-Lbl '' 22 40 650 36 $script:Fnt.Small $script:Clr.Dim; $iniStatus.AutoEllipsis = $true
+        $iniCard.Controls.Add($iniStatus)
+        $refreshIni = {
+            $path = Find-FnConfig
+            if ($path) { $iniStatus.Text = "FOUND: $path"; $iniStatus.ForeColor = $script:Clr.Good }
+            else { $iniStatus.Text = 'NOT FOUND. Launch Fortnite once, close it, then scan again or locate the file manually.'; $iniStatus.ForeColor = $script:Clr.Warn }
+        }.GetNewClosure()
+        $scan = New-Btn 'SCAN / LOCATE INI' 190 36 $true $ac 'search'
+        $scan.Location = New-Object Drawing.Point(680, 38)
+        $scan.Add_Click({
+            $path = Find-FnConfig
+            if (-not $path) { $path = Find-FnConfig -Prompt }
+            if ($path) { $iniStatus.Text = "FOUND: $path"; $iniStatus.ForeColor = $script:Clr.Good }
+            else { $iniStatus.Text = 'NOT FOUND. Launch Fortnite once and try again.'; $iniStatus.ForeColor = $script:Clr.Warn }
+        }.GetNewClosure())
+        $iniCard.Controls.Add($scan); $flow.Controls.Add($iniCard); & $refreshIni
     }
-    return (Build-TweakPage 'GAMES' 'FORTNITE' 'In-game configuration, GPU preference, anti-cheat-safe priority and session cleanup.' $pre)
+    return (Build-TweakPage 'GAMES' 'FORTNITE' 'Auto-detect GameUserSettings.ini and apply reversible config values; close Fortnite before applying.' $pre)
 }
 
 # ---------- Premium centers ----------
-function Build-CleanupCenter {
-    $p = New-PageShell 'CLEANUP' 'FRENZY CLEANUP CENTER' 'Review storage first. Clearing caches can make applications rebuild data.' 112
-    $f = $script:Pages['CLEANUP'].Flow
-    $f.Controls.Add((New-Section 'SELECTIVE STORAGE CLEANUP' $script:PageClr.CLEANUP))
-    $f.Controls.Add((New-HubCard 'DISCORD / STEAM / EPIC CACHES' 'Review app cache sizes and select exactly what to remove. Close the affected app first.' 'REVIEW APP CACHES' { Show-AppCacheCleanup } $script:PageClr.CLEANUP 'trash'))
-    $f.Controls.Add((New-HubCard 'WINDOWS TEMPORARY FILES' 'Scan temp folders and legacy caches. Shader caches and protected folders require extra review.' 'REVIEW WINDOWS CACHE' { Show-DiskCleanup } $script:PageClr.CLEANUP 'trash'))
-    $f.Controls.Add((New-Section 'STORAGE SAFETY' $script:PageClr.CLEANUP))
-    $n = New-Card 900 105 'full' $script:PageClr.CLEANUP
-    $n.Controls.Add((New-Lbl 'NO AUTOMATIC DELETION' 22 14 750 26 $script:Fnt.Row $script:Clr.Text))
-    $n.Controls.Add((New-Lbl 'Scan before cleaning. Deleting caches does not guarantee better FPS; shader cache deletion can cause stutter.' 22 48 830 42 $script:Fnt.Small $script:Clr.Dim))
-    $f.Controls.Add($n)
-    return $p
-}
 function Build-RestoreCenter {
     $p = New-PageShell 'RESTORE' 'FRENZY RESTORE CENTER' 'Recovery, saved state and audit history.' 112
     $f = $script:Pages['RESTORE'].Flow
@@ -3189,7 +3205,6 @@ Add-NavBtn 'GAMES' 'Fortnite' ([string](Get-PageTweaks 'GAMES').Count)
 Add-NavLabel 'TWEAKS'
 Add-NavBtn 'GENERAL' 'General' ([string](Get-PageTweaks 'GENERAL').Count)
 Add-NavBtn 'DEBLOAT' 'Debloat' ''
-Add-NavBtn 'CLEANUP' 'Cleanup Center' ''
 Add-NavBtn 'RESTORE' 'Restore Center' ''
 Add-NavBtn 'INPUT' 'Input Delay' ([string](Get-PageTweaks 'INPUT').Count)
 Add-NavBtn 'GPU' 'GPU' ([string](Get-PageTweaks 'GPU').Count)
@@ -3226,7 +3241,6 @@ Pump
 Add-Page (Build-Home); Pump
 Add-Page (Build-TweakPage 'GENERAL' 'GENERAL' 'Baseline Windows privacy, notifications and cleanup. Flip the switches you want, then APPLY CHANGES.'); Pump
 Add-Page (Build-Debloat); Pump
-Add-Page (Build-CleanupCenter); Pump
 Add-Page (Build-RestoreCenter); Pump
 Add-Page (Build-TweakPage 'INPUT' 'INPUT DELAY' 'Mouse, keyboard, overlay and background-service tweaks that keep your inputs responsive.'); Pump
 Add-Page (Build-Gpu); Pump
@@ -3246,7 +3260,7 @@ Log ("Loaded {0} tweaks. {1} detected ({2}). Laptop Guard: {3}." -f $script:Twea
 Log "State/backup: $script:StateFile"
 if (-not $script:HasNvidia) { Log 'No NVIDIA GPU detected - NVIDIA profile and GPU sensors are unavailable.' 'WARN' }
 
-# everything that used to run after the window opened now runs behind the splash
+# Prepare the main UI while the loader is visible, but do not show the main window until the loader has finished.
 Refresh-AllRows; Pump
 $script:LastRP = Get-LastRestorePoint
 Update-GameCard; Update-Home; Show-Page 'HOME'; Pump
@@ -3259,7 +3273,7 @@ $fm.Add_Shown({
         if ($global:FrenzySplashForm) {
             if ($global:FrenzySplashStarted) {
                 $global:FrenzySplashReady = $true
-                # The splash timer will remove only the splash at 10 seconds; keep the main form available behind it.
+                # The pre-launch wait normally removes the splash before the main form is shown.
                 try { $this.BeginInvoke([Action]{ if ($global:FrenzySplashForm) { $global:FrenzySplashForm.Activate() } }) | Out-Null } catch {}
             } else {
                 try {
@@ -3274,4 +3288,19 @@ $fm.Add_Shown({
         }
         $script:Timer.Start()
     })
+
+# External GitHub bootstraps may create their own splash. Pump WinForms events while it finishes,
+# then dispose only that splash before showing the actual application window.
+if ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed) {
+    $waitStart = if ($global:FrenzySplashStarted -is [DateTime]) { $global:FrenzySplashStarted } else { [DateTime]::UtcNow }
+    while ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed -and
+           (([DateTime]::UtcNow - $waitStart).TotalSeconds -lt 10)) {
+        [Windows.Forms.Application]::DoEvents()
+        Start-Sleep -Milliseconds 25
+    }
+    if ($global:FrenzySplashTimer) { try { $global:FrenzySplashTimer.Stop() } catch {} }
+    $lastSplash = $global:FrenzySplashForm
+    $global:FrenzySplashForm = $null
+    try { $lastSplash.TopMost = $false; $lastSplash.Hide(); $lastSplash.Dispose() } catch {}
+}
 [void]$fm.ShowDialog()

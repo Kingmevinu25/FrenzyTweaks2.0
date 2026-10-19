@@ -791,6 +791,32 @@ $script:Tweaks = New-Object System.Collections.ArrayList
 $script:LogBox = $null
 $script:RebootNeeded = $false
 
+# Restart reminder survives relaunches but clears after an actual Windows reboot.
+$script:RestartFile = Join-Path $script:Dir 'restart-pending.json'
+function Get-FrenzyBootTime {
+    try { return [string]((Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')) } catch { return '' }
+}
+function Test-FrenzyRestartPending {
+    if (-not (Test-Path $script:RestartFile)) { return $false }
+    try {
+        $saved = Get-Content $script:RestartFile -Raw -ErrorAction Stop | ConvertFrom-Json
+        $boot = Get-FrenzyBootTime
+        if ($boot -and $saved.Boot -and $boot -ne $saved.Boot) { Remove-Item $script:RestartFile -Force -ErrorAction SilentlyContinue; return $false }
+        return $true
+    } catch { return $true }
+}
+function Set-FrenzyRestartPending {
+    try { @{ Boot = (Get-FrenzyBootTime); Recorded = (Get-Date).ToString('o'); Reason = 'A system tweak requires restarting Windows' } | ConvertTo-Json | Set-Content $script:RestartFile -Encoding UTF8 } catch { Log "Could not save restart reminder: $($_.Exception.Message)" 'WARN' }
+    Update-FrenzyRestartNotice
+}
+function Update-FrenzyRestartNotice {
+    if (-not $script:RestartNotice -or $script:RestartNotice.IsDisposed) { return }
+    if (Test-FrenzyRestartPending) {
+        $script:RestartNotice.Text = 'RESTART REQUIRED  |  Some changes take effect after Windows restarts.'
+        $script:RestartNotice.Visible = $true
+    } else { $script:RestartNotice.Visible = $false }
+}
+
 function Load-State {
     if (Test-Path $script:StateFile) {
         try {
@@ -1570,9 +1596,9 @@ $script:Clr = @{
 # every category has its own colour + icon
 $script:PageClr = @{
     HOME = (New-Rgb 168 85 247); GENERAL = (New-Rgb 168 85 247); DEBLOAT = (New-Rgb 168 85 247); INPUT = (New-Rgb 168 85 247)
-    GPU = (New-Rgb 168 85 247); NETWORK = (New-Rgb 168 85 247); GAMES = (New-Rgb 168 85 247); CLEANUP = (New-Rgb 168 85 247); RESTORE = (New-Rgb 168 85 247)
+    GPU = (New-Rgb 168 85 247); NETWORK = (New-Rgb 168 85 247); GAMES = (New-Rgb 168 85 247); CLEANUP = (New-Rgb 168 85 247); RESTORE = (New-Rgb 168 85 247); DIAGNOSTICS = (New-Rgb 168 85 247)
 }
-$script:PageIcon = @{ HOME = 'home'; GENERAL = 'sliders'; DEBLOAT = 'trash'; INPUT = 'bolt'; GPU = 'chip'; NETWORK = 'globe'; GAMES = 'game'; CLEANUP = 'trash'; RESTORE = 'undo' }
+$script:PageIcon = @{ HOME = 'home'; GENERAL = 'sliders'; DEBLOAT = 'trash'; INPUT = 'bolt'; GPU = 'chip'; NETWORK = 'globe'; GAMES = 'game'; CLEANUP = 'trash'; RESTORE = 'undo'; DIAGNOSTICS = 'scan' }
 $script:Acc = $script:Clr.Accent
 $script:Fnt = @{
     Norm = [Fz.Theme]::F(13, $false); Bold = [Fz.Theme]::F(13, $true); Small = [Fz.Theme]::F(12, $false); SmallB = [Fz.Theme]::F(12, $true)
@@ -2224,6 +2250,7 @@ function Invoke-Run($ApplyList, $UndoList, [bool]$Confirm = $true) {
         $script:ActivityNotice.Text = $(if ($fail -gt 0) { "COMPLETED WITH ERRORS  |  $ok successful, $fail failed" } elseif ($dry) { "PREVIEW COMPLETE  |  $skipped changes reviewed" } else { "SUCCESS  |  $ok changes completed" })
         $script:ActivityNotice.ForeColor = $(if ($fail -gt 0) { [Drawing.Color]::FromArgb(255,193,90) } else { [Drawing.Color]::FromArgb(74,222,128) })
     }
+    if (-not $dry -and $script:RebootNeeded) { Set-FrenzyRestartPending }
     Refresh-AllRows; Update-Home
     if (-not $dry) {
         $m = "FRENZY TWEAKS - OPTIMIZATION SUMMARY`n`nSuccessful: $ok`nFailed: $fail`nSkipped: $skipped`n`nRestart: may be required for some changes."
@@ -3246,6 +3273,149 @@ function Get-FrenzyFortniteStatus {
     return @{ Exe = $exe; Config = $cfg; Running = $running; Mode = $mode }
 }
 
+# ---------- V4 read-only diagnostics ----------
+function Get-FrenzyThermals {
+    $lines = New-Object Collections.Generic.List[string]
+    $lines.Add('THERMAL AND CLOCK DATA (READ-ONLY)')
+    $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cpu) { $lines.Add("CPU clock: $($cpu.CurrentClockSpeed) MHz  |  Max reported: $($cpu.MaxClockSpeed) MHz") }
+    # ACPI ThermalZone data is not generally a CPU-core sensor; do not mislabel it.
+    $lines.Add('CPU core temperature: unavailable through standard Windows WMI; use trusted sensor software.')
+    $nv = Get-NvSmi
+    if ($nv) {
+        $lines.Add("NVIDIA GPU: $($nv.Name)")
+        $lines.Add("GPU temperature: $(if ($null -ne $nv.Temp) { "$($nv.Temp) C" } else { 'unavailable' })  |  Load: $(if ($null -ne $nv.Load) { "$($nv.Load)%" } else { 'unavailable' })")
+        $lines.Add("GPU power state: $($nv.PState)  |  Power: $($nv.PowerDraw) W")
+        try {
+            $clocks = & $script:NvSmiPath '--query-gpu=clocks.current.graphics,clocks.current.memory,clocks_throttle_reasons.active' '--format=csv,noheader,nounits' 2>$null | Select-Object -First 1
+            if ($clocks) { $lines.Add("NVIDIA clocks / throttle flags: $($clocks.Trim())") }
+        } catch { $lines.Add('GPU throttle flags unavailable on this driver.') }
+    } else { $lines.Add('GPU temperature / throttle flags: unavailable (NVIDIA-SMI unsupported or missing).') }
+    $lines.Add('Throttle reasons need driver/sensor confirmation; a low clock by itself does not prove throttling.')
+    return ($lines -join "`r`n")
+}
+function Get-FrenzyStorageHealth {
+    $lines = New-Object Collections.Generic.List[string]
+    $lines.Add('STORAGE HEALTH (READ-ONLY)')
+    $fortnite = Find-FortniteExe -Quiet
+    if ($fortnite) { $lines.Add("Fortnite: $fortnite") } else { $lines.Add('Fortnite installation: not found') }
+    try {
+        $disks = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction Stop)
+        foreach ($d in $disks) {
+            $free = [math]::Round([double]$d.FreeSpace / 1GB, 1)
+            $total = [math]::Round([double]$d.Size / 1GB, 1)
+            $tag = if ($fortnite -and $fortnite.StartsWith($d.DeviceID, [StringComparison]::OrdinalIgnoreCase)) { '  [FORTNITE DRIVE]' } else { '' }
+            $lines.Add("$($d.DeviceID)   $free GB free / $total GB total$tag")
+        }
+    } catch { $lines.Add("Drive space unavailable: $($_.Exception.Message)") }
+    try {
+        $pd = @(Get-PhysicalDisk -ErrorAction Stop)
+        foreach ($d in $pd) {
+            $lines.Add("Physical disk: $($d.FriendlyName)  |  Media: $($d.MediaType)  |  Health: $($d.HealthStatus)")
+        }
+        $lines.Add('Physical disk inventory does not establish the Fortnite volume mapping on all storage controllers.')
+    } catch { $lines.Add('Physical disk health/media data unavailable on this Windows/storage controller.') }
+    return ($lines -join "`r`n")
+}
+function Get-FrenzyDisplayInfo {
+    $lines = New-Object Collections.Generic.List[string]
+    $lines.Add('DISPLAY SETTINGS (READ-ONLY)')
+    foreach ($s in [Windows.Forms.Screen]::AllScreens) {
+        $lines.Add("$($s.DeviceName)  |  $($s.Bounds.Width)x$($s.Bounds.Height)  |  Primary: $($s.Primary)")
+    }
+    try {
+        $video = @(Get-CimInstance Win32_VideoController -ErrorAction Stop)
+        foreach ($v in $video) {
+            if ($v.CurrentRefreshRate -and $v.CurrentRefreshRate -lt 1000) { $lines.Add("$($v.Name)  |  Driver-reported refresh: $($v.CurrentRefreshRate) Hz") }
+        }
+    } catch { $lines.Add('Driver-reported refresh rate unavailable.') }
+    $lines.Add('Verify the active monitor refresh rate in Windows Settings > System > Display > Advanced display.')
+    $lines.Add('Higher refresh rates may improve perceived smoothness; FPS, frame times and the display path also matter.')
+    return ($lines -join "`r`n")
+}
+function Measure-FrenzyBaseline {
+    $cpu = $null; $mem = $null; $ping = @(); $loss = 0
+    try {
+        $cpu = [math]::Round([double]((Get-CimInstance Win32_Processor -ErrorAction Stop | Measure-Object -Property LoadPercentage -Average).Average), 1)
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+        $mem = [math]::Round(100 * (1 - [double]$os.FreePhysicalMemory / [double]$os.TotalVisibleMemorySize), 1)
+    } catch {}
+    $p = New-Object Net.NetworkInformation.Ping
+    try {
+        for ($i=0; $i -lt 6; $i++) {
+            try { $r = $p.Send('1.1.1.1', 1200); if ($r.Status -eq 'Success') { $ping += [double]$r.RoundtripTime } else { $loss++ } } catch { $loss++ }
+            [Windows.Forms.Application]::DoEvents()
+        }
+    } finally { $p.Dispose() }
+    $avg = if ($ping.Count) { [math]::Round(($ping | Measure-Object -Average).Average, 1) } else { $null }
+    $jitter = $null
+    if ($ping.Count -gt 1) {
+        $delta = @(); for ($i=1; $i -lt $ping.Count; $i++) { $delta += [math]::Abs($ping[$i] - $ping[$i-1]) }
+        $jitter = [math]::Round(($delta | Measure-Object -Average).Average, 1)
+    }
+    return [pscustomobject]@{ When=(Get-Date).ToString('g'); CPU=$cpu; Memory=$mem; Ping=$avg; Jitter=$jitter; Loss=[math]::Round(100*$loss/6,1) }
+}
+function Format-FrenzyBaseline($b) {
+    if (-not $b) { return 'No measurement saved yet.' }
+    return "Captured: $($b.When)`r`nCPU load: $($b.CPU)%  |  RAM used: $($b.Memory)%`r`nPing: $($b.Ping) ms  |  Jitter: $($b.Jitter) ms  |  Loss: $($b.Loss)%"
+}
+function Build-V4Diagnostics {
+    $p = New-PageShell 'DIAGNOSTICS' 'SYSTEM DIAGNOSTICS' 'Read-only hardware checks, real network samples and benchmark comparison.' 112
+    $flow = $script:Pages['DIAGNOSTICS'].Flow; $ac = $script:PageClr.DIAGNOSTICS
+    foreach ($item in @(
+        @('THERMAL & THROTTLING', 'READ SENSORS', 'Get-FrenzyThermals'),
+        @('STORAGE HEALTH', 'SCAN DRIVES', 'Get-FrenzyStorageHealth'),
+        @('DISPLAY & REFRESH RATE', 'CHECK DISPLAY', 'Get-FrenzyDisplayInfo')
+    )) {
+        $c = New-Card 900 174 'full' $ac
+        $c.Controls.Add((New-Lbl $item[0] 22 12 580 23 $script:Fnt.Row $script:Clr.Text))
+        $output = New-Object Windows.Forms.TextBox
+        $output.Multiline = $true; $output.ReadOnly = $true; $output.ScrollBars = 'Vertical'
+        $output.Location = New-Object Drawing.Point(22, 46); $output.Size = New-Object Drawing.Size(845, 113)
+        $output.BackColor = $script:Clr.Card; $output.ForeColor = $script:Clr.Text; $output.BorderStyle = 'None'; $output.Font = $script:Fnt.Small
+        $output.Text = 'Click Scan to collect available hardware readings.'
+        $c.Controls.Add($output)
+        $button = New-Btn $item[1] 210 32 $false $ac 'scan'; $button.Location = New-Object Drawing.Point(650, 8)
+        $fn = [string]$item[2]
+        $button.Add_Click({
+            $this.Enabled = $false
+            try { $output.Text = & $fn; Log "$fn completed" }
+            catch { $output.Text = "Scan failed: $($_.Exception.Message)"; Log $output.Text 'WARN' }
+            finally { $this.Enabled = $true }
+        }.GetNewClosure())
+        $c.Controls.Add($button); $flow.Controls.Add($c)
+    }
+    $flow.Controls.Add((New-Section 'BEFORE / AFTER BENCHMARK' $ac))
+    $card = New-Card 900 252 'full' $ac
+    $script:BenchOutput = New-Object Windows.Forms.TextBox
+    $script:BenchOutput.Multiline = $true; $script:BenchOutput.ReadOnly = $true; $script:BenchOutput.ScrollBars = 'Vertical'
+    $script:BenchOutput.Location = New-Object Drawing.Point(22, 75)
+    $script:BenchOutput.Size = New-Object Drawing.Size(835, 155)
+    $script:BenchOutput.Font = $script:Fnt.Small; $script:BenchOutput.BackColor = $script:Clr.Card; $script:BenchOutput.ForeColor = $script:Clr.Text; $script:BenchOutput.BorderStyle = 'None'
+    $script:BenchOutput.Text = 'Capture a BEFORE sample; make your changes; then capture AFTER under comparable conditions. Network target: 1.1.1.1 (not a Fortnite server).'
+    $before = New-Btn 'CAPTURE BEFORE' 195 36 $true $ac 'scan'; $before.Location = New-Object Drawing.Point(22, 18)
+    $after = New-Btn 'CAPTURE AFTER' 195 36 $false $ac 'scan'; $after.Location = New-Object Drawing.Point(233, 18)
+    $before.Add_Click({
+        $this.Enabled = $false
+        try {
+            $script:BenchBefore = Measure-FrenzyBaseline
+            $script:BenchOutput.Text = "BEFORE`r`n$(Format-FrenzyBaseline $script:BenchBefore)`r`n`r`nCapture AFTER under comparable conditions."
+            Log 'Before benchmark captured'
+        } catch { Log "Benchmark failed: $($_.Exception.Message)" 'ERROR' } finally { $this.Enabled = $true }
+    })
+    $after.Add_Click({
+        if (-not $script:BenchBefore) { [void][Fz.Msg]::Show('Capture BEFORE first.', 'Benchmark'); return }
+        $this.Enabled = $false
+        try {
+            $a = Measure-FrenzyBaseline; $b = $script:BenchBefore
+            $script:BenchOutput.Text = "BEFORE`r`n$(Format-FrenzyBaseline $b)`r`n`r`nAFTER`r`n$(Format-FrenzyBaseline $a)`r`n`r`nCompare numbers in identical conditions; lower ping/jitter/loss is usually better. CPU load is workload-dependent. This is not an FPS benchmark."
+            Log 'After benchmark captured'
+        } catch { Log "Benchmark failed: $($_.Exception.Message)" 'ERROR' } finally { $this.Enabled = $true }
+    })
+    $card.Controls.AddRange(@($before,$after,$script:BenchOutput)); $flow.Controls.Add($card)
+    return $p
+}
+
 # ---------- Premium centers ----------
 function Build-RestoreCenter {
     $p = New-PageShell 'RESTORE' 'FRENZY RESTORE CENTER' 'Recovery, saved state and audit history.' 112
@@ -3324,6 +3494,7 @@ Add-NavLabel 'TWEAKS'
 Add-NavBtn 'GENERAL' 'General' ([string](Get-PageTweaks 'GENERAL').Count)
 Add-NavBtn 'DEBLOAT' 'Debloat' ''
 Add-NavBtn 'RESTORE' 'Restore Center' ''
+Add-NavBtn 'DIAGNOSTICS' 'Diagnostics' ''
 Add-NavBtn 'INPUT' 'Input Delay' ([string](Get-PageTweaks 'INPUT').Count)
 Add-NavBtn 'GPU' 'GPU & CPU' ([string](Get-PageTweaks 'GPU').Count)
 Add-NavBtn 'NETWORK' 'Network' ([string](Get-PageTweaks 'NETWORK').Count)
@@ -3358,6 +3529,14 @@ Fix-Scroll $script:LogBox
 $logPanel.Controls.Add($script:LogBox); $logPanel.Controls.Add($logHead); $logPanel.Controls.Add($script:Progress); $script:LogBox.BringToFront()
 $content.Controls.Add($script:PagesHost); $content.Controls.Add($logPanel); $script:PagesHost.BringToFront()
 $fm.Controls.Add($content); $fm.Controls.Add($side); $fm.Controls.Add($topBar); $content.BringToFront()
+$script:RestartNotice = New-Object Windows.Forms.Label
+$script:RestartNotice.Dock = 'Top'; $script:RestartNotice.Height = 28
+$script:RestartNotice.BackColor = [Drawing.Color]::FromArgb(95,63,20)
+$script:RestartNotice.ForeColor = [Drawing.Color]::FromArgb(255,226,161)
+$script:RestartNotice.Font = $script:Fnt.SmallB; $script:RestartNotice.TextAlign = 'MiddleCenter'
+$fm.Controls.Add($script:RestartNotice)
+$script:RestartNotice.BringToFront()
+Update-FrenzyRestartNotice
 $script:Toast = New-Object Windows.Forms.Label
 $script:Toast.Size = New-Object Drawing.Size(435, 48)
 $script:Toast.BackColor = [Drawing.Color]::FromArgb(48, 33, 65)
@@ -3405,6 +3584,7 @@ Add-Page (Build-Home); Pump
 Add-Page (Build-TweakPage 'GENERAL' 'GENERAL' 'Baseline Windows privacy, notifications and cleanup. Flip the switches you want, then APPLY CHANGES.'); Pump
 Add-Page (Build-Debloat); Pump
 Add-Page (Build-RestoreCenter); Pump
+Add-Page (Build-V4Diagnostics); Pump
 Add-Page (Build-InputDiagnostics); Pump
 Add-Page (Build-Gpu); Pump
 Add-Page (Build-Network); Pump

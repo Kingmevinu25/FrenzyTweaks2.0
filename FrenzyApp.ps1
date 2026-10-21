@@ -1,18 +1,19 @@
 #Requires -Version 5.1
 <#
-  FRENZY TWEAKS v2.0.0  (WinForms UI)
-  - Applies / undoes the tweaks from your list
-  - Creates a restore point first; backs up the REAL original value of every registry
-    setting, service and task it touches, so Undo restores your actual previous state
+  FRENZY TWEAKS v2.5.0 Premium  (Black & Purple Cyber-Luxury Suite)
+  - Self-contained single-file FPS & Latency Optimizer for Windows 10 & 11
+  - Minimalist, high-performance UI matching modern competitive gaming suites
+  - Animated Cyber Splash Loader with live hardware detection
+  - Fully reversible tweak core with deep registry, service and task backup
   Run with Windows PowerShell 5.1 as Administrator (it self-elevates).
 #>
 
 # ---------- Elevation ----------
-$script:AppVersion = '2.0.0'
+$script:AppVersion = '2.5.0'
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     if ($PSCommandPath) { Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -STA -File `"$PSCommandPath`"" }
-    else { Write-Host 'FRENZY TWEAKS needs Administrator. Re-run the install command from an elevated PowerShell.' -ForegroundColor Red }
+    else { Write-Host 'FRENZY TWEAKS needs Administrator. Re-run from an elevated PowerShell.' -ForegroundColor Red }
     return
 }
 
@@ -20,7 +21,6 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# ---------- UI engine (custom-drawn controls, compiled once at start) ----------
 $script:FzSource = @'
 using System;
 using System.Collections.Generic;
@@ -34,32 +34,70 @@ namespace Fz
 {
     public static class Theme
     {
-        public static string Head = "Segoe UI";
+        public static string Head = "Segoe UI Semibold";
+        public static string Title = "Bahnschrift";
         public static string Mono = "Consolas";
-        public static Color Bg = Color.FromArgb(16, 16, 21);
-        public static Color Side = Color.FromArgb(12, 11, 19);
-        public static Color Card = Color.FromArgb(27, 27, 37);
-        public static Color Card2 = Color.FromArgb(37, 29, 51);
-        public static Color Border = Color.FromArgb(62, 43, 78);
-        public static Color Text = Color.FromArgb(240, 244, 255);
-        public static Color Dim = Color.FromArgb(159, 150, 173);
-        public static Color Accent = Color.FromArgb(168, 85, 247);
-        public static Color Good = Color.FromArgb(74, 222, 128);
-        public static Color Warn = Color.FromArgb(255, 200, 70);
-        public static Color Bad = Color.FromArgb(255, 82, 82);
+        public static Color Bg = Color.FromArgb(8, 9, 13);
+        public static Color Side = Color.FromArgb(12, 13, 18);
+        public static Color Card = Color.FromArgb(17, 19, 26);
+        public static Color Card2 = Color.FromArgb(22, 25, 35);
+        public static Color CardHover = Color.FromArgb(20, 23, 32);
+        public static Color Border = Color.FromArgb(37, 37, 53);
+        public static Color BorderLit = Color.FromArgb(147, 51, 234);
+        public static Color BorderHover = Color.FromArgb(61, 45, 106);
+        public static Color Text = Color.FromArgb(248, 250, 252);
+        public static Color Dim = Color.FromArgb(148, 163, 184);
+        public static Color Accent = Color.FromArgb(147, 51, 234);
+        public static Color AccentHi = Color.FromArgb(168, 85, 247);
+        public static Color AccentBright = Color.FromArgb(192, 132, 252);
+        public static Color Good = Color.FromArgb(34, 197, 94);
+        public static Color Warn = Color.FromArgb(234, 179, 8);
+        public static Color Bad = Color.FromArgb(239, 68, 68);
+        public static Color Cyan = Color.FromArgb(6, 182, 212);
+
         static Dictionary<string, Font> cache = new Dictionary<string, Font>();
         public static Font F(float px, bool bold)
         {
-            string k = "H" + px + bold;
+            string k = "H" + px + bold + Head;
             Font f;
-            if (!cache.TryGetValue(k, out f)) { f = new Font(Head, px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); cache[k] = f; }
+            if (!cache.TryGetValue(k, out f))
+            {
+                try { f = new Font(Head, px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); }
+                catch { f = new Font("Segoe UI", px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); }
+                if (f.FontFamily.Name == "Microsoft Sans Serif")
+                {
+                    try { f = new Font("Segoe UI", px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); } catch { }
+                }
+                cache[k] = f;
+            }
+            return f;
+        }
+        public static Font T(float px, bool bold)
+        {
+            string k = "T" + px + bold + Title;
+            Font f;
+            if (!cache.TryGetValue(k, out f))
+            {
+                try { f = new Font(Title, px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); }
+                catch { f = new Font("Segoe UI Semibold", px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); }
+                if (f.FontFamily.Name == "Microsoft Sans Serif")
+                {
+                    try { f = new Font("Segoe UI Semibold", px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); } catch { }
+                }
+                cache[k] = f;
+            }
             return f;
         }
         public static Font M(float px, bool bold)
         {
             string k = "M" + px + bold;
             Font f;
-            if (!cache.TryGetValue(k, out f)) { f = new Font(Mono, px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); cache[k] = f; }
+            if (!cache.TryGetValue(k, out f))
+            {
+                try { f = new Font(Mono, px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); }
+                catch { f = new Font("Lucida Console", px, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel); }
+                cache[k] = f;
+            }
             return f;
         }
     }
@@ -95,8 +133,9 @@ namespace Fz
         public static void Quality(Graphics g)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
         }
         public static StringFormat Fmt(StringAlignment h, StringAlignment v)
         {
@@ -122,53 +161,53 @@ namespace Fz
                 switch (kind)
                 {
                     case "home":
-                        g.DrawLines(p, new PointF[] { P(.08f, .52f, s, ox, oy), P(.5f, .12f, s, ox, oy), P(.92f, .52f, s, ox, oy) });
-                        g.DrawLines(p, new PointF[] { P(.2f, .44f, s, ox, oy), P(.2f, .9f, s, ox, oy), P(.8f, .9f, s, ox, oy), P(.8f, .44f, s, ox, oy) });
+                        g.DrawLines(p, new PointF[] { P(.1f, .5f, s, ox, oy), P(.5f, .14f, s, ox, oy), P(.9f, .5f, s, ox, oy) });
+                        g.DrawLines(p, new PointF[] { P(.22f, .42f, s, ox, oy), P(.22f, .88f, s, ox, oy), P(.78f, .88f, s, ox, oy), P(.78f, .42f, s, ox, oy) });
                         break;
                     case "sliders":
                         for (int i = 0; i < 3; i++)
                         {
                             float y = .2f + i * .3f, kx = (i == 0 ? .66f : i == 1 ? .32f : .55f);
-                            g.DrawLine(p, P(.08f, y, s, ox, oy), P(.92f, y, s, ox, oy));
-                            g.FillEllipse(b, ox + (kx - .11f) * s, oy + (y - .11f) * s, .22f * s, .22f * s);
+                            g.DrawLine(p, P(.1f, y, s, ox, oy), P(.9f, y, s, ox, oy));
+                            g.FillEllipse(b, ox + (kx - .10f) * s, oy + (y - .10f) * s, .20f * s, .20f * s);
                         }
                         break;
                     case "trash":
-                        g.DrawLine(p, P(.12f, .24f, s, ox, oy), P(.88f, .24f, s, ox, oy));
-                        g.DrawLines(p, new PointF[] { P(.34f, .24f, s, ox, oy), P(.38f, .08f, s, ox, oy), P(.62f, .08f, s, ox, oy), P(.66f, .24f, s, ox, oy) });
-                        g.DrawLines(p, new PointF[] { P(.2f, .24f, s, ox, oy), P(.26f, .92f, s, ox, oy), P(.74f, .92f, s, ox, oy), P(.8f, .24f, s, ox, oy) });
+                        g.DrawLine(p, P(.14f, .26f, s, ox, oy), P(.86f, .26f, s, ox, oy));
+                        g.DrawLines(p, new PointF[] { P(.36f, .26f, s, ox, oy), P(.38f, .12f, s, ox, oy), P(.62f, .12f, s, ox, oy), P(.64f, .26f, s, ox, oy) });
+                        g.DrawLines(p, new PointF[] { P(.22f, .26f, s, ox, oy), P(.28f, .88f, s, ox, oy), P(.72f, .88f, s, ox, oy), P(.78f, .26f, s, ox, oy) });
                         break;
                     case "bolt":
-                        g.DrawLines(p, new PointF[] { P(.58f, .06f, s, ox, oy), P(.22f, .55f, s, ox, oy), P(.5f, .55f, s, ox, oy), P(.4f, .94f, s, ox, oy), P(.78f, .4f, s, ox, oy), P(.5f, .4f, s, ox, oy), P(.58f, .06f, s, ox, oy) });
+                        g.DrawLines(p, new PointF[] { P(.58f, .08f, s, ox, oy), P(.24f, .52f, s, ox, oy), P(.52f, .52f, s, ox, oy), P(.42f, .92f, s, ox, oy), P(.76f, .42f, s, ox, oy), P(.5f, .42f, s, ox, oy), P(.58f, .08f, s, ox, oy) });
                         break;
                     case "chip":
                         g.DrawRectangle(p, ox + .24f * s, oy + .24f * s, .52f * s, .52f * s);
                         for (int i = 0; i < 3; i++)
                         {
                             float t = .34f + i * .16f;
-                            g.DrawLine(p, P(t, .24f, s, ox, oy), P(t, .08f, s, ox, oy)); g.DrawLine(p, P(t, .76f, s, ox, oy), P(t, .92f, s, ox, oy));
-                            g.DrawLine(p, P(.24f, t, s, ox, oy), P(.08f, t, s, ox, oy)); g.DrawLine(p, P(.76f, t, s, ox, oy), P(.92f, t, s, ox, oy));
+                            g.DrawLine(p, P(t, .24f, s, ox, oy), P(t, .10f, s, ox, oy)); g.DrawLine(p, P(t, .76f, s, ox, oy), P(t, .90f, s, ox, oy));
+                            g.DrawLine(p, P(.24f, t, s, ox, oy), P(.10f, t, s, ox, oy)); g.DrawLine(p, P(.76f, t, s, ox, oy), P(.90f, t, s, ox, oy));
                         }
                         break;
                     case "globe":
-                        g.DrawEllipse(p, ox + .1f * s, oy + .1f * s, .8f * s, .8f * s);
-                        g.DrawEllipse(p, ox + .34f * s, oy + .1f * s, .32f * s, .8f * s);
-                        g.DrawLine(p, P(.1f, .5f, s, ox, oy), P(.9f, .5f, s, ox, oy));
+                    case "wifi":
+                        g.DrawArc(p, ox + .12f * s, oy + .24f * s, .76f * s, .60f * s, 200, 140);
+                        g.DrawArc(p, ox + .26f * s, oy + .40f * s, .48f * s, .40f * s, 200, 140);
+                        g.FillEllipse(b, ox + .44f * s, oy + .72f * s, .12f * s, .12f * s);
                         break;
-                    case "game":
-                        using (GraphicsPath gp = Gfx.Round(new RectangleF(ox + .06f * s, oy + .26f * s, .88f * s, .5f * s), .22f * s)) g.DrawPath(p, gp);
-                        g.DrawLine(p, P(.26f, .42f, s, ox, oy), P(.26f, .6f, s, ox, oy)); g.DrawLine(p, P(.17f, .51f, s, ox, oy), P(.35f, .51f, s, ox, oy));
-                        g.FillEllipse(b, ox + .62f * s, oy + .4f * s, .1f * s, .1f * s); g.FillEllipse(b, ox + .74f * s, oy + .52f * s, .1f * s, .1f * s);
+                    case "layers":
+                    case "services":
+                        g.DrawLines(p, new PointF[] { P(.5f, .16f, s, ox, oy), P(.86f, .34f, s, ox, oy), P(.5f, .52f, s, ox, oy), P(.14f, .34f, s, ox, oy), P(.5f, .16f, s, ox, oy) });
+                        g.DrawLines(p, new PointF[] { P(.16f, .52f, s, ox, oy), P(.5f, .68f, s, ox, oy), P(.84f, .52f, s, ox, oy) });
+                        g.DrawLines(p, new PointF[] { P(.16f, .70f, s, ox, oy), P(.5f, .86f, s, ox, oy), P(.84f, .70f, s, ox, oy) });
                         break;
-                    case "search":
-                        g.DrawEllipse(p, ox + .1f * s, oy + .1f * s, .56f * s, .56f * s);
-                        g.DrawLine(p, P(.58f, .58f, s, ox, oy), P(.9f, .9f, s, ox, oy));
-                        break;
-                    case "shield":
-                        g.DrawLines(p, new PointF[] { P(.5f, .06f, s, ox, oy), P(.86f, .2f, s, ox, oy), P(.82f, .56f, s, ox, oy), P(.5f, .94f, s, ox, oy), P(.18f, .56f, s, ox, oy), P(.14f, .2f, s, ox, oy), P(.5f, .06f, s, ox, oy) });
-                        g.DrawLines(p, new PointF[] { P(.34f, .5f, s, ox, oy), P(.46f, .62f, s, ox, oy), P(.68f, .38f, s, ox, oy) });
+                    case "broom":
+                    case "cleanup":
+                        g.DrawLine(p, P(.24f, .82f, s, ox, oy), P(.76f, .18f, s, ox, oy));
+                        g.DrawLines(p, new PointF[] { P(.16f, .84f, s, ox, oy), P(.34f, .66f, s, ox, oy), P(.46f, .78f, s, ox, oy), P(.28f, .96f, s, ox, oy), P(.16f, .84f, s, ox, oy) });
                         break;
                     case "gear":
+                    case "settings":
                         g.DrawEllipse(p, ox + .3f * s, oy + .3f * s, .4f * s, .4f * s);
                         for (int i = 0; i < 8; i++)
                         {
@@ -176,31 +215,38 @@ namespace Fz
                             g.DrawLine(p, cx + (float)Math.Cos(a) * .3f * s, cy + (float)Math.Sin(a) * .3f * s, cx + (float)Math.Cos(a) * .44f * s, cy + (float)Math.Sin(a) * .44f * s);
                         }
                         break;
-                    case "apps":
-                        for (int i = 0; i < 4; i++) { float x = (i % 2) * .46f + .06f, y = (i / 2) * .46f + .06f; using (GraphicsPath gp = Gfx.Round(new RectangleF(ox + x * s, oy + y * s, .38f * s, .38f * s), .08f * s)) g.DrawPath(p, gp); }
+                    case "monitor":
+                        g.DrawRectangle(p, ox + .12f * s, oy + .16f * s, .76f * s, .52f * s);
+                        g.DrawLine(p, P(.5f, .68f, s, ox, oy), P(.5f, .84f, s, ox, oy));
+                        g.DrawLine(p, P(.32f, .84f, s, ox, oy), P(.68f, .84f, s, ox, oy));
+                        break;
+                    case "shield":
+                        g.DrawLines(p, new PointF[] { P(.5f, .10f, s, ox, oy), P(.84f, .24f, s, ox, oy), P(.80f, .58f, s, ox, oy), P(.5f, .90f, s, ox, oy), P(.20f, .58f, s, ox, oy), P(.16f, .24f, s, ox, oy), P(.5f, .10f, s, ox, oy) });
+                        g.DrawLines(p, new PointF[] { P(.36f, .50f, s, ox, oy), P(.46f, .62f, s, ox, oy), P(.66f, .38f, s, ox, oy) });
+                        break;
+                    case "game":
+                        using (GraphicsPath gp = Gfx.Round(new RectangleF(ox + .06f * s, oy + .26f * s, .88f * s, .5f * s), .22f * s)) g.DrawPath(p, gp);
+                        g.DrawLine(p, P(.26f, .42f, s, ox, oy), P(.26f, .6f, s, ox, oy)); g.DrawLine(p, P(.17f, .51f, s, ox, oy), P(.35f, .51f, s, ox, oy));
+                        g.FillEllipse(b, ox + .62f * s, oy + .4f * s, .1f * s, .1f * s); g.FillEllipse(b, ox + .74f * s, oy + .52f * s, .1f * s, .1f * s);
+                        break;
+                    case "arrow":
+                        g.DrawLine(p, P(.16f, .5f, s, ox, oy), P(.82f, .5f, s, ox, oy));
+                        g.DrawLines(p, new PointF[] { P(.56f, .24f, s, ox, oy), P(.84f, .5f, s, ox, oy), P(.56f, .76f, s, ox, oy) });
+                        break;
+                    case "check":
+                        g.DrawLines(p, new PointF[] { P(.20f, .50f, s, ox, oy), P(.42f, .72f, s, ox, oy), P(.82f, .28f, s, ox, oy) });
+                        break;
+                    case "search":
+                        g.DrawEllipse(p, ox + .12f * s, oy + .12f * s, .54f * s, .54f * s);
+                        g.DrawLine(p, P(.54f, .54f, s, ox, oy), P(.88f, .88f, s, ox, oy));
                         break;
                     case "clock":
-                        g.DrawEllipse(p, ox + .1f * s, oy + .1f * s, .8f * s, .8f * s);
-                        g.DrawLines(p, new PointF[] { P(.5f, .26f, s, ox, oy), P(.5f, .5f, s, ox, oy), P(.68f, .6f, s, ox, oy) });
-                        break;
                     case "undo":
                         g.DrawArc(p, ox + .16f * s, oy + .2f * s, .68f * s, .64f * s, 200, 250);
                         g.DrawLines(p, new PointF[] { P(.12f, .14f, s, ox, oy), P(.2f, .36f, s, ox, oy), P(.42f, .28f, s, ox, oy) });
                         break;
-                    case "arrow":
-                        g.DrawLine(p, P(.12f, .5f, s, ox, oy), P(.86f, .5f, s, ox, oy));
-                        g.DrawLines(p, new PointF[] { P(.58f, .22f, s, ox, oy), P(.88f, .5f, s, ox, oy), P(.58f, .78f, s, ox, oy) });
-                        break;
-                    case "check":
-                        g.DrawLines(p, new PointF[] { P(.16f, .54f, s, ox, oy), P(.4f, .78f, s, ox, oy), P(.86f, .24f, s, ox, oy) });
-                        break;
-                    case "scan":
-                        g.DrawEllipse(p, ox + .12f * s, oy + .12f * s, .76f * s, .76f * s);
-                        g.DrawEllipse(p, ox + .32f * s, oy + .32f * s, .36f * s, .36f * s);
-                        g.FillEllipse(b, ox + .45f * s, oy + .45f * s, .1f * s, .1f * s);
-                        break;
                     default:
-                        g.FillEllipse(b, ox + .3f * s, oy + .3f * s, .4f * s, .4f * s);
+                        g.DrawEllipse(p, ox + .24f * s, oy + .24f * s, .52f * s, .52f * s);
                         break;
                 }
             }
@@ -209,64 +255,30 @@ namespace Fz
 
     public static class Native
     {
-        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int val, int size);
-        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
-        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int n);
-        [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
-        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-        [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool f);
-        [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
-        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr h, string sub, string idl);
+        [DllImport("DwmApi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, int[] val, int size);
+        [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool ReleaseCapture();
-        [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, int msg, int w, int l);
-
-        public static void DarkScroll(IntPtr hwnd)
-        {
-            try { SetWindowTheme(hwnd, "DarkMode_Explorer", null); } catch { }
-        }
-        public static void DarkTitle(IntPtr hwnd)
-        {
-            try
-            {
-                int one = 1;
-                DwmSetWindowAttribute(hwnd, 20, ref one, 4);
-                DwmSetWindowAttribute(hwnd, 19, ref one, 4);
-                int cap = (Theme.Side.B << 16) | (Theme.Side.G << 8) | Theme.Side.R;
-                DwmSetWindowAttribute(hwnd, 35, ref cap, 4);
-                int txt = (Theme.Text.B << 16) | (Theme.Text.G << 8) | Theme.Text.R;
-                DwmSetWindowAttribute(hwnd, 36, ref txt, 4);
-            }
-            catch { }
-        }
-        public static void Foreground(IntPtr hwnd)
-        {
-            try
-            {
-                ShowWindow(hwnd, 9);
-                keybd_event(0x12, 0, 0, UIntPtr.Zero);
-                keybd_event(0x12, 0, 2, UIntPtr.Zero);
-                IntPtr fg = GetForegroundWindow();
-                uint pid; uint fgT = GetWindowThreadProcessId(fg, out pid); uint me = GetCurrentThreadId();
-                if (fgT != me && fgT != 0) AttachThreadInput(me, fgT, true);
-                BringWindowToTop(hwnd); SetForegroundWindow(hwnd);
-                if (fgT != me && fgT != 0) AttachThreadInput(me, fgT, false);
-            }
-            catch { }
-        }
+        [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] public static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
+        [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+        [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr hIcon);
+        public static void DarkTitle(IntPtr h) { int[] d = new int[] { 1 }; DwmSetWindowAttribute(h, 20, d, 4); DwmSetWindowAttribute(h, 19, d, 4); }
+        public static void Foreground(IntPtr h) { SetForegroundWindow(h); }
+        public static void DarkScroll(IntPtr h) { try { SetWindowTheme(h, "DarkMode_Explorer", null); } catch { } }
     }
 
     public class FzFlow : FlowLayoutPanel
     {
-        public FzFlow() { this.DoubleBuffered = true; }
-        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); Native.DarkScroll(Handle); }
+        public FzFlow()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        }
     }
 
     public class FzCard : Panel
     {
         bool hot, lit;
-        public int Radius = 12;
+        public int Radius = 10;
         public Color Accent = Theme.Accent;
         public bool Stripe = false;
         public bool Glow = false;
@@ -287,7 +299,7 @@ namespace Fz
             set
             {
                 if (lit == value) return;
-                if (value) { unlit = BackColor; BackColor = Gfx.Mix(unlit, Accent, 0.10f); } else { BackColor = unlit; }
+                if (value) { unlit = BackColor; BackColor = Gfx.Mix(unlit, Accent, 0.12f); } else { BackColor = unlit; }
                 lit = value; Invalidate();
             }
         }
@@ -313,59 +325,237 @@ namespace Fz
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics; Gfx.Quality(g);
-            RectangleF r = new RectangleF(1f, 1f, Width - 3f, Height - 3f);
+            RectangleF r = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
             using (GraphicsPath p = Gfx.Round(r, Radius))
             {
-                using (SolidBrush b = new SolidBrush(BackColor)) g.FillPath(b, p);
+                Color bg = lit ? Gfx.Mix(Theme.Card, Accent, 0.14f) : (hot && Hover ? Theme.CardHover : BackColor);
+                using (SolidBrush b = new SolidBrush(bg)) g.FillPath(b, p);
                 if (lit || Glow)
                 {
-                    for (int i = 3; i >= 1; i--) using (Pen gp = new Pen(Gfx.A(Accent, 16 * (4 - i)), i * 2f)) g.DrawPath(gp, p);
+                    for (int i = 2; i >= 1; i--) using (Pen gp = new Pen(Gfx.A(Accent, 24 * (3 - i)), i * 1.5f)) g.DrawPath(gp, p);
                 }
-                Color bc = lit ? Gfx.A(Accent, 215) : (hot ? Gfx.A(Accent, 130) : Theme.Border);
-                using (Pen bp = new Pen(bc, lit ? 1.5f : 1f)) g.DrawPath(bp, p);
+                Color bc = lit ? Gfx.A(Accent, 210) : (hot && Hover ? Theme.BorderHover : Theme.Border);
+                using (Pen bp = new Pen(bc, 1f)) g.DrawPath(bp, p);
             }
             if (Stripe)
             {
-                using (GraphicsPath sp = Gfx.Round(new RectangleF(1f, 14f, 4f, Math.Max(8f, Height - 30f)), 2f))
-                using (SolidBrush sb = new SolidBrush(lit ? Accent : Gfx.A(Accent, 150))) g.FillPath(sb, sp);
+                using (GraphicsPath sp = Gfx.Round(new RectangleF(0.5f, 14f, 3.5f, Math.Max(8f, Height - 30f)), 1.5f))
+                using (SolidBrush sb = new SolidBrush(lit ? Accent : Gfx.A(Accent, 180))) g.FillPath(sb, sp);
             }
             if (Icon != null)
             {
                 float iy = IconY >= 0 ? IconY : (Height - IconSize) / 2f;
-                Icons.Draw(g, Icon, new RectangleF(IconX, iy, IconSize, IconSize), Gfx.A(Accent, 230), IconSize > 20 ? 2.1f : 1.7f);
+                Icons.Draw(g, Icon, new RectangleF(IconX, iy, IconSize, IconSize), Gfx.A(Accent, 235), IconSize > 20 ? 2f : 1.6f);
+            }
+        }
+    }
+
+    public class FzCategoryCard : Control
+    {
+        bool hot;
+        public string Title = "";
+        public string Description = "";
+        public string Icon = "gear";
+        public Color Accent = Theme.Accent;
+
+        public FzCategoryCard()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            Cursor = Cursors.Hand;
+            Height = 74;
+            BackColor = Theme.Card;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hot = true; Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hot = false; Invalidate(); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Gfx.Quality(g);
+            g.Clear(Gfx.BgOf(this));
+
+            RectangleF r = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using (GraphicsPath p = Gfx.Round(r, 10f))
+            {
+                Color bg = hot ? Theme.CardHover : Theme.Card;
+                using (SolidBrush b = new SolidBrush(bg)) g.FillPath(b, p);
+                Color bc = hot ? Theme.BorderHover : Theme.Border;
+                using (Pen bp = new Pen(bc, 1f)) g.DrawPath(bp, p);
+            }
+
+            // Left icon container (36x36 rounded)
+            RectangleF iconBox = new RectangleF(14, (Height - 36) / 2f, 36, 36);
+            using (GraphicsPath ip = Gfx.Round(iconBox, 8f))
+            {
+                using (SolidBrush ib = new SolidBrush(Gfx.A(Accent, hot ? 45 : 30))) g.FillPath(ib, ip);
+            }
+            Icons.Draw(g, Icon, new RectangleF(iconBox.X + 8, iconBox.Y + 8, 20, 20), hot ? Theme.AccentBright : Accent, 1.8f);
+
+            // Right arrow
+            Icons.Draw(g, "arrow", new RectangleF(Width - 28, (Height - 14) / 2f, 14, 14), hot ? Accent : Gfx.A(Theme.Dim, 160), 1.6f);
+
+            // Text
+            float tx = iconBox.Right + 12f;
+            float tw = Width - tx - 36f;
+            Font tf = Theme.F(13.5f, true);
+            using (SolidBrush tb = new SolidBrush(Theme.Text))
+            using (StringFormat sf = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
+            {
+                g.DrawString(Title, tf, tb, new RectangleF(tx, 14, tw, 22), sf);
+            }
+
+            Font df = Theme.F(11f, false);
+            using (SolidBrush db = new SolidBrush(Theme.Dim))
+            using (StringFormat sf = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
+            {
+                g.DrawString(Description, df, db, new RectangleF(tx, 38, tw, 20), sf);
             }
         }
     }
 
     public class FzHeader : Panel
     {
+        public string Title = "GENERAL";
+        public string Subtitle = "SYSTEM PERFORMANCE   /   WINDOWS OPTIMIZATION";
+        public string Breadcrumb = "";
         public Color Accent = Theme.Accent;
+
         public FzHeader()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            Height = 104;
             BackColor = Theme.Bg;
         }
+
         protected override void OnPaint(PaintEventArgs e)
         {
-            Graphics g = e.Graphics; Gfx.Quality(g);
-            using (SolidBrush b = new SolidBrush(Theme.Bg)) g.FillRectangle(b, ClientRectangle);
-            using (GraphicsPath gp = new GraphicsPath())
+            Graphics g = e.Graphics;
+            Gfx.Quality(g);
+
+            // 1. Rich dark banner background with subtle ambient gradient (photo/banner canvas)
+            RectangleF r = new RectangleF(0, 0, Width, Height);
+            using (LinearGradientBrush bgBrush = new LinearGradientBrush(
+                new PointF(0, 0), new PointF(Width, Height),
+                Color.FromArgb(14, 15, 23),
+                Color.FromArgb(8, 9, 13)))
             {
-                gp.AddEllipse(Width - 560f, -230f, 720f, 380f);
-                using (PathGradientBrush pg = new PathGradientBrush(gp))
+                g.FillRectangle(bgBrush, r);
+            }
+
+            // 2. Left vertical accent bar
+            using (LinearGradientBrush ab = new LinearGradientBrush(
+                new RectangleF(0, 12, 4, Height - 24),
+                Theme.AccentBright, Theme.Accent, 90f))
+            {
+                g.FillRectangle(ab, 0, 12, 4, Height - 24);
+            }
+
+            // 3. Right subtle dot grid (cyber matrix)
+            using (SolidBrush db = new SolidBrush(Gfx.A(Theme.Accent, 18)))
+            {
+                for (int x = (int)Width - 220; x < Width - 10; x += 18)
                 {
-                    pg.CenterColor = Gfx.A(Accent, 62);
-                    pg.SurroundColors = new Color[] { Gfx.A(Accent, 0) };
-                    g.FillPath(pg, gp);
+                    for (int y = 12; y < Height - 12; y += 18)
+                    {
+                        g.FillEllipse(db, x, y, 2.2f, 2.2f);
+                    }
                 }
             }
-            using (Pen gridPen = new Pen(Gfx.A(Accent, 9), 1f))
+
+            // 4. Right side 3D stylized glowing F emblem (photo/graphic banner element)
+            float logoSize = Math.Min(Height - 24f, 84f);
+            float logoX = Width - logoSize - 28f;
+            float logoY = (Height - logoSize) / 2f;
+            if (Height > 130) { logoY = 16f; }
+
+            // Ambient glow behind emblem
+            using (GraphicsPath gp = new GraphicsPath())
             {
-                for (int x = 0; x < Width; x += 34) g.DrawLine(gridPen, x, 0, x, Height);
-                for (int y = 0; y < Height; y += 34) g.DrawLine(gridPen, 0, y, Width, y);
+                gp.AddEllipse(logoX - 10f, logoY - 10f, logoSize + 20f, logoSize + 20f);
+                using (PathGradientBrush pgb = new PathGradientBrush(gp))
+                {
+                    pgb.CenterColor = Gfx.A(Theme.Accent, 40);
+                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, Theme.Accent) };
+                    g.FillPath(pgb, gp);
+                }
             }
-            Rectangle lr = new Rectangle(0, Height - 2, Math.Max(2, Width), 2);
-            using (LinearGradientBrush lb = new LinearGradientBrush(lr, Gfx.A(Accent, 230), Gfx.A(Accent, 0), 0f)) g.FillRectangle(lb, lr);
+
+            // Geometric cyber accents
+            using (Pen lp = new Pen(Gfx.A(Theme.Accent, 40), 1f))
+            {
+                g.DrawLine(lp, logoX - 30f, 18f, logoX - 10f, 18f);
+                g.DrawLine(lp, logoX - 10f, 18f, logoX - 10f, 38f);
+                g.DrawLine(lp, Width - 24f, Height - 18f, Width - 44f, Height - 18f);
+            }
+
+            // Draw 3D-angled F logo
+            using (GraphicsPath lp1 = new GraphicsPath())
+            {
+                PointF[] pts = new PointF[] {
+                    new PointF(logoX + logoSize * 0.22f, logoY + logoSize * 0.12f),
+                    new PointF(logoX + logoSize * 0.82f, logoY + logoSize * 0.12f),
+                    new PointF(logoX + logoSize * 0.72f, logoY + logoSize * 0.32f),
+                    new PointF(logoX + logoSize * 0.44f, logoY + logoSize * 0.32f),
+                    new PointF(logoX + logoSize * 0.40f, logoY + logoSize * 0.46f),
+                    new PointF(logoX + logoSize * 0.68f, logoY + logoSize * 0.46f),
+                    new PointF(logoX + logoSize * 0.60f, logoY + logoSize * 0.62f),
+                    new PointF(logoX + logoSize * 0.36f, logoY + logoSize * 0.62f),
+                    new PointF(logoX + logoSize * 0.28f, logoY + logoSize * 0.88f),
+                    new PointF(logoX + logoSize * 0.12f, logoY + logoSize * 0.88f)
+                };
+                lp1.AddPolygon(pts);
+                using (LinearGradientBrush lb = new LinearGradientBrush(
+                    new RectangleF(logoX, logoY, logoSize, logoSize),
+                    Gfx.A(Theme.AccentBright, 180),
+                    Gfx.A(Theme.Accent, 70), 45f))
+                {
+                    g.FillPath(lb, lp1);
+                }
+                using (Pen lop = new Pen(Gfx.A(Theme.AccentBright, 220), 1.5f))
+                {
+                    g.DrawPath(lop, lp1);
+                }
+            }
+
+            // 5. Clean, non-overlapping banner typography
+            string bc = !string.IsNullOrEmpty(Breadcrumb) ? Breadcrumb : ("FRENZY TWEAKS   /   " + Title.ToUpper());
+            Font bcf = Theme.M(10f, true);
+            using (SolidBrush bcb = new SolidBrush(Gfx.A(Theme.Dim, 175)))
+            {
+                g.DrawString(bc, bcf, bcb, new PointF(26, 14));
+            }
+
+            // Title
+            Font tf = Theme.T(26, true);
+            using (SolidBrush tb = new SolidBrush(Theme.Text))
+            {
+                g.DrawString(Title.ToUpper(), tf, tb, new PointF(24, 32));
+            }
+
+            // Subtitle
+            Font sfnt = Theme.F(11.5f, false);
+            using (SolidBrush sb = new SolidBrush(Theme.Dim))
+            {
+                g.DrawString(Subtitle, sfnt, sb, new PointF(26, 68));
+            }
+
+            // Divider line if taller header (with search / action buttons)
+            if (Height > 120)
+            {
+                using (Pen divPen = new Pen(Gfx.A(Theme.Border, 140), 1f))
+                {
+                    g.DrawLine(divPen, 24, 98, Width - 24, 98);
+                }
+            }
+
+            // Bottom border
+            using (LinearGradientBrush bb = new LinearGradientBrush(
+                new RectangleF(0, Height - 1, Width, 1),
+                Gfx.A(Theme.Accent, 140), Gfx.A(Theme.Accent, 0), 0f))
+            {
+                g.FillRectangle(bb, 0, Height - 1, Width, 1);
+            }
         }
     }
 
@@ -375,43 +565,87 @@ namespace Fz
         public FzHero()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            BackColor = Color.FromArgb(14, 19, 34);
-        }
-        protected override void OnPaintBackground(PaintEventArgs e)
-        {
-            using (SolidBrush b = new SolidBrush(Gfx.BgOf(this))) e.Graphics.FillRectangle(b, e.ClipRectangle);
+            Height = 144;
+            BackColor = Theme.Card;
         }
         protected override void OnPaint(PaintEventArgs e)
         {
-            Graphics g = e.Graphics; Gfx.Quality(g);
-            RectangleF r = new RectangleF(1f, 1f, Width - 3f, Height - 3f);
-            using (GraphicsPath p = Gfx.Round(r, 14f))
+            Graphics g = e.Graphics;
+            Gfx.Quality(g);
+            g.Clear(Gfx.BgOf(this));
+
+            RectangleF r = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using (GraphicsPath p = Gfx.Round(r, 12f))
             {
-                using (SolidBrush b = new SolidBrush(BackColor)) g.FillPath(b, p);
-                GraphicsState st = g.Save();
-                g.SetClip(p, CombineMode.Intersect);
-                using (GraphicsPath gp = new GraphicsPath())
-                {
-                    gp.AddEllipse(-120f, -140f, 760f, 420f);
-                    using (PathGradientBrush pg = new PathGradientBrush(gp))
-                    {
-                        pg.CenterColor = Gfx.A(Accent, 70); pg.SurroundColors = new Color[] { Gfx.A(Accent, 0) };
-                        g.FillPath(pg, gp);
-                    }
-                }
-                using (Pen gp2 = new Pen(Gfx.A(Accent, 22), 1f))
-                {
-                    for (int x = 0; x < Width; x += 28) g.DrawLine(gp2, x, 0, x, Height);
-                    for (int y = 0; y < Height; y += 28) g.DrawLine(gp2, 0, y, Width, y);
-                }
-                g.Restore(st);
-                using (Pen bp = new Pen(Gfx.A(Accent, 90), 1f)) g.DrawPath(bp, p);
+                using (SolidBrush b = new SolidBrush(Theme.Card)) g.FillPath(b, p);
+                using (Pen bp = new Pen(Theme.Border, 1f)) g.DrawPath(bp, p);
             }
-            using (Pen br = new Pen(Accent, 2.4f))
+
+            // Welcome text
+            Font wf = Theme.F(12.5f, false);
+            using (SolidBrush wb = new SolidBrush(Theme.Dim))
             {
-                float L = 26f, m = 12f;
-                g.DrawLines(br, new PointF[] { new PointF(m, m + L), new PointF(m, m), new PointF(m + L, m) });
-                g.DrawLines(br, new PointF[] { new PointF(Width - m, Height - m - L), new PointF(Width - m, Height - m), new PointF(Width - m - L, Height - m) });
+                g.DrawString("Welcome back,", wf, wb, new PointF(24, 22));
+            }
+
+            // Main Title "Frenzy Tweaks"
+            Font tf = Theme.T(28, true);
+            using (SolidBrush tb1 = new SolidBrush(Theme.Text))
+            {
+                g.DrawString("Frenzy ", tf, tb1, new PointF(24, 44));
+            }
+            SizeF ws = g.MeasureString("Frenzy ", tf, 500, StringFormat.GenericTypographic);
+            using (SolidBrush tb2 = new SolidBrush(Theme.AccentHi))
+            {
+                g.DrawString("Tweaks", tf, tb2, new PointF(24 + ws.Width, 44));
+            }
+
+            // Description
+            Font df = Theme.F(11.5f, false);
+            using (SolidBrush db = new SolidBrush(Theme.Dim))
+            {
+                g.DrawString("Optimize your system for better performance, lower input delay\nand a smoother gaming experience.", df, db, new PointF(24, 88));
+            }
+
+            // Right side 3D stylized glowing F emblem
+            float logoX = Width - 130f;
+            float logoY = 28f;
+            float logoS = 88f;
+
+            // Ambient glow behind emblem
+            using (GraphicsPath gp = new GraphicsPath())
+            {
+                gp.AddEllipse(logoX - 20f, logoY - 10f, logoS + 40f, logoS + 20f);
+                using (PathGradientBrush pgb = new PathGradientBrush(gp))
+                {
+                    pgb.CenterColor = Gfx.A(Theme.Accent, 70);
+                    pgb.SurroundColors = new Color[] { Gfx.A(Theme.Accent, 0) };
+                    g.FillPath(pgb, gp);
+                }
+            }
+
+            // Angled purple rays
+            using (Pen rp = new Pen(Gfx.A(Theme.AccentHi, 55), 1.5f))
+            {
+                g.DrawLine(rp, logoX - 40f, logoY + logoS, logoX + 20f, logoY);
+                g.DrawLine(rp, logoX - 10f, logoY + logoS, logoX + 50f, logoY);
+            }
+
+            // Draw 'F' geometric logo polygon
+            PointF[] pts = new PointF[] {
+                new PointF(0.24f, 0.14f), new PointF(0.76f, 0.14f), new PointF(0.76f, 0.32f),
+                new PointF(0.44f, 0.32f), new PointF(0.44f, 0.46f), new PointF(0.68f, 0.46f),
+                new PointF(0.68f, 0.60f), new PointF(0.44f, 0.60f), new PointF(0.44f, 0.86f),
+                new PointF(0.24f, 0.86f)
+            };
+            PointF[] poly = new PointF[pts.Length];
+            for (int i = 0; i < pts.Length; i++)
+            {
+                poly[i] = new PointF(logoX + logoS * (pts[i].X + 0.14f * (0.5f - pts[i].Y)), logoY + logoS * pts[i].Y);
+            }
+            using (LinearGradientBrush fbr = new LinearGradientBrush(new RectangleF(logoX, logoY, logoS, logoS), Theme.AccentBright, Theme.Accent, 45f))
+            {
+                g.FillPolygon(fbr, poly);
             }
         }
     }
@@ -422,7 +656,7 @@ namespace Fz
         public Color Accent = Theme.Accent;
         public bool Primary = false;
         public string Icon = null;
-        public int Radius = 9;
+        public int Radius = 8;
         public FzButton()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -438,33 +672,34 @@ namespace Fz
         {
             Graphics g = e.Graphics; Gfx.Quality(g);
             g.Clear(Gfx.BgOf(this));
-            RectangleF r = new RectangleF(0.5f, 0.5f, Width - 2f, Height - 2f);
-            Color fg; 
+            RectangleF r = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            Color fg;
             using (GraphicsPath p = Gfx.Round(r, Radius))
             {
                 if (!Enabled)
                 {
                     using (SolidBrush b = new SolidBrush(Theme.Card2)) g.FillPath(b, p);
-                    fg = Gfx.A(Theme.Dim, 150);
+                    fg = Gfx.A(Theme.Dim, 140);
                 }
                 else if (Primary)
                 {
-                    Color top = Gfx.Mix(Accent, Color.White, down ? 0f : (hot ? 0.28f : 0.14f));
-                    Color bot = Gfx.Mix(Accent, Color.Black, down ? 0.3f : 0.16f);
-                    using (LinearGradientBrush lb = new LinearGradientBrush(new RectangleF(0, 0, Width, Height + 1), top, bot, 90f)) g.FillPath(lb, p);
-                    if (hot) using (Pen gp = new Pen(Gfx.A(Accent, 90), 2.5f)) g.DrawPath(gp, p);
-                    fg = Gfx.IsLight(Accent) ? Color.FromArgb(20, 12, 4) : Color.White;
+                    Color baseCol = down ? Gfx.Mix(Accent, Color.Black, 0.25f) : (hot ? Gfx.Mix(Accent, Color.White, 0.12f) : Accent);
+                    Color bot = Gfx.Mix(baseCol, Color.Black, 0.18f);
+                    using (LinearGradientBrush lb = new LinearGradientBrush(new RectangleF(0, 0, Width, Height + 1), baseCol, bot, 90f)) g.FillPath(lb, p);
+                    if (hot) using (Pen gp = new Pen(Gfx.A(Color.White, 40), 1f)) g.DrawPath(gp, p);
+                    fg = Color.White;
                 }
                 else
                 {
-                    Color fill = hot ? Gfx.Mix(Theme.Card2, Accent, 0.18f) : Theme.Card2;
-                    using (SolidBrush b = new SolidBrush(down ? Gfx.Mix(fill, Color.Black, 0.2f) : fill)) g.FillPath(b, p);
-                    using (Pen bp = new Pen(hot ? Gfx.A(Accent, 200) : Theme.Border, 1.2f)) g.DrawPath(bp, p);
-                    fg = hot ? Color.White : Theme.Text;
+                    Color fill = down ? Color.FromArgb(14, 15, 20) : (hot ? Color.FromArgb(22, 24, 34) : Color.FromArgb(17, 19, 26));
+                    using (SolidBrush b = new SolidBrush(fill)) g.FillPath(b, p);
+                    Color bc = hot ? Gfx.A(Accent, 180) : Theme.Border;
+                    using (Pen bp = new Pen(bc, 1f)) g.DrawPath(bp, p);
+                    fg = hot ? Theme.Text : Gfx.Mix(Theme.Dim, Theme.Text, 0.7f);
                 }
             }
             float tx = 0f; float iw = 0f;
-            if (Icon != null) iw = 16f;
+            if (Icon != null) iw = 15f;
             SizeF ts = g.MeasureString(Text, Font, 2000, StringFormat.GenericTypographic);
             float total = ts.Width + (iw > 0 ? iw + 7f : 0f);
             float sx = Math.Max(8f, (Width - total) / 2f);
@@ -483,7 +718,7 @@ namespace Fz
         public FzToggle()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
-            Size = new Size(46, 24); Cursor = Cursors.Hand;
+            Size = new Size(44, 22); Cursor = Cursors.Hand;
             t = new Timer(); t.Interval = 14; t.Tick += Step;
         }
         public bool Checked
@@ -498,89 +733,88 @@ namespace Fz
             if (Math.Abs(target - pos) < 0.02f) { pos = target; t.Stop(); }
             Invalidate();
         }
-        protected override void OnClick(EventArgs e)
-        {
-            base.OnClick(e);
-            if (!Enabled) return;
-            on = !on; t.Start(); Invalidate();
-            if (CheckedChanged != null) CheckedChanged(this, EventArgs.Empty);
-        }
-        protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
-        protected override void Dispose(bool d) { if (d && t != null) { t.Stop(); t.Dispose(); } base.Dispose(d); }
+        protected override void OnClick(EventArgs e) { base.OnClick(e); on = !on; t.Start(); if (CheckedChanged != null) CheckedChanged(this, EventArgs.Empty); }
+        protected override void Dispose(bool d) { if (d && t != null) t.Dispose(); base.Dispose(d); }
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics; Gfx.Quality(g);
             g.Clear(Gfx.BgOf(this));
-            float h = Height - 4f, w = Width - 4f;
-            RectangleF tr = new RectangleF(2f, 2f, w, h);
-            Color offC = Color.FromArgb(52, 64, 96);
-            Color c = Gfx.Mix(offC, OnColor, pos);
-            if (!Enabled) c = Gfx.Mix(c, Theme.Bg, 0.5f);
-            using (GraphicsPath p = Gfx.Round(tr, h / 2f))
+            float h = Height - 2f, w = Width - 2f;
+            RectangleF track = new RectangleF(1f, 1f, w, h);
+            using (GraphicsPath p = Gfx.Round(track, h / 2f))
             {
-                if (pos > 0.05f) using (Pen gp = new Pen(Gfx.A(OnColor, (int)(60 * pos)), 3f)) g.DrawPath(gp, p);
-                using (SolidBrush b = new SolidBrush(c)) g.FillPath(b, p);
+                Color bg = Gfx.Mix(Color.FromArgb(28, 30, 42), OnColor, pos);
+                using (SolidBrush b = new SolidBrush(bg)) g.FillPath(b, p);
+                Color bc = Gfx.Mix(Theme.Border, Gfx.A(OnColor, 200), pos);
+                using (Pen bp = new Pen(bc, 1f)) g.DrawPath(bp, p);
             }
-            float d = h - 6f;
-            float kx = 2f + 3f + pos * (w - 6f - d);
-            using (SolidBrush kb = new SolidBrush(Enabled ? Color.White : Theme.Dim)) g.FillEllipse(kb, kx, 2f + 3f, d, d);
+            float diam = h - 4f;
+            float kx = 3f + pos * (w - diam - 6f);
+            using (SolidBrush b = new SolidBrush(Color.White))
+                g.FillEllipse(b, kx, 3f, diam, diam);
         }
     }
 
     public class FzProgress : Control
     {
-        int max = 100, val = 0;
+        int v = 0;
         public Color Accent = Theme.Accent;
+        public int Value
+        {
+            get { return v; }
+            set { int nv = Math.Max(0, Math.Min(100, value)); if (nv == v) return; v = nv; Invalidate(); }
+        }
         public FzProgress()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             Height = 6;
         }
-        public int Maximum { get { return max; } set { max = Math.Max(1, value); Invalidate(); } }
-        public int Value { get { return val; } set { val = Math.Max(0, Math.Min(max, value)); Invalidate(); } }
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics; Gfx.Quality(g);
             g.Clear(Gfx.BgOf(this));
             RectangleF tr = new RectangleF(0, 0, Width - 1f, Height - 1f);
-            using (GraphicsPath p = Gfx.Round(tr, Height / 2f)) using (SolidBrush b = new SolidBrush(Theme.Card2)) g.FillPath(b, p);
-            float fw = (Width - 1f) * val / (float)max;
-            if (fw >= Height)
-            {
-                RectangleF fr = new RectangleF(0, 0, fw, Height - 1f);
-                using (GraphicsPath p = Gfx.Round(fr, Height / 2f))
-                using (LinearGradientBrush lb = new LinearGradientBrush(new RectangleF(0, 0, Math.Max(2f, fw), Height), Gfx.Mix(Accent, Color.Black, 0.25f), Gfx.Mix(Accent, Color.White, 0.25f), 0f))
-                    g.FillPath(lb, p);
-            }
+            using (GraphicsPath p = Gfx.Round(tr, Height / 2f))
+            using (SolidBrush b = new SolidBrush(Theme.Card2)) g.FillPath(b, p);
+            if (v <= 0) return;
+            float fw = Math.Max(Height, (Width - 1f) * (v / 100f));
+            RectangleF fr = new RectangleF(0, 0, fw, Height - 1f);
+            using (GraphicsPath p = Gfx.Round(fr, Height / 2f))
+            using (LinearGradientBrush b = new LinearGradientBrush(fr, Accent, Theme.AccentHi, 0f)) g.FillPath(b, p);
         }
     }
 
     public class FzPill : Control
     {
-        public Color Tint = Theme.Good;
+        public Color Tint = Theme.Accent;
         public FzPill()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            Font = Theme.M(11f, true); Height = 20;
+            Font = Theme.M(10.5f, true); Height = 22;
         }
         public void Fit()
         {
-            Size s = TextRenderer.MeasureText(Text, Font, new Size(2000, 40), TextFormatFlags.NoPadding);
-            Width = s.Width + 20; 
+            using (Graphics g = CreateGraphics())
+            {
+                SizeF s = g.MeasureString(Text, Font, 200, StringFormat.GenericTypographic);
+                Width = (int)Math.Ceiling(s.Width) + 16;
+            }
+            Invalidate();
         }
-        protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Invalidate(); }
+        protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Fit(); }
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics; Gfx.Quality(g);
             g.Clear(Gfx.BgOf(this));
-            RectangleF r = new RectangleF(0.5f, 0.5f, Width - 2f, Height - 2f);
-            using (GraphicsPath p = Gfx.Round(r, (Height - 2f) / 2f))
+            RectangleF r = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using (GraphicsPath p = Gfx.Round(r, 6f))
             {
-                using (SolidBrush b = new SolidBrush(Gfx.A(Tint, 34))) g.FillPath(b, p);
-                using (Pen pen = new Pen(Gfx.A(Tint, 110), 1f)) g.DrawPath(pen, p);
+                using (SolidBrush b = new SolidBrush(Gfx.A(Tint, 30))) g.FillPath(b, p);
+                using (Pen bp = new Pen(Gfx.A(Tint, 110), 1f)) g.DrawPath(bp, p);
             }
-            using (SolidBrush tb = new SolidBrush(Tint)) using (StringFormat f = Gfx.Fmt(StringAlignment.Center, StringAlignment.Center))
-                g.DrawString(Text, Font, tb, new RectangleF(0, 0, Width, Height), f);
+            using (SolidBrush tb = new SolidBrush(Tint))
+            using (StringFormat f = Gfx.Fmt(StringAlignment.Center, StringAlignment.Center))
+                g.DrawString(Text, Font, tb, r, f);
         }
     }
 
@@ -594,7 +828,7 @@ namespace Fz
         public FzNav()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            Cursor = Cursors.Hand; Height = 44;
+            Cursor = Cursors.Hand; Height = 42;
         }
         public void Select(bool s) { Selected = s; Invalidate(); }
         protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hot = true; Invalidate(); }
@@ -603,33 +837,44 @@ namespace Fz
         {
             Graphics g = e.Graphics; Gfx.Quality(g);
             g.Clear(Gfx.BgOf(this));
-            RectangleF r = new RectangleF(8f, 2f, Width - 16f, Height - 5f);
-            using (GraphicsPath p = Gfx.Round(r, 10f))
+            RectangleF r = new RectangleF(8f, 2f, Width - 16f, Height - 4f);
+            using (GraphicsPath p = Gfx.Round(r, 8f))
             {
                 if (Selected)
                 {
-                    using (SolidBrush b = new SolidBrush(Gfx.Mix(Theme.Side, Accent, 0.17f))) g.FillPath(b, p);
-                    using (Pen pen = new Pen(Gfx.A(Accent, 120), 1.2f)) g.DrawPath(pen, p);
+                    using (SolidBrush b = new SolidBrush(Gfx.A(Accent, 35))) g.FillPath(b, p);
                 }
-                else if (hot) using (SolidBrush b = new SolidBrush(Theme.Card)) g.FillPath(b, p);
+                else if (hot)
+                {
+                    using (SolidBrush b = new SolidBrush(Gfx.A(Theme.Text, 8))) g.FillPath(b, p);
+                }
             }
-            if (Selected) using (GraphicsPath bp = Gfx.Round(new RectangleF(8f, 11f, 4f, Height - 22f), 2f)) using (SolidBrush bb = new SolidBrush(Accent)) g.FillPath(bb, bp);
-            Color ic = Selected ? Accent : (hot ? Gfx.Mix(Theme.Dim, Accent, 0.6f) : Gfx.Mix(Theme.Dim, Accent, 0.28f));
-            Icons.Draw(g, Icon, new RectangleF(24f, (Height - 18f) / 2f, 18f, 18f), ic, 1.7f);
-            Font f = Theme.F(14f, true);
-            using (SolidBrush tb = new SolidBrush(Selected || hot ? Theme.Text : Gfx.Mix(Theme.Dim, Theme.Text, 0.4f))) using (StringFormat sf = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
-                g.DrawString(Text, f, tb, new RectangleF(54f, 0, Width - 110f, Height), sf);
+            if (Selected)
+            {
+                using (GraphicsPath sp = Gfx.Round(new RectangleF(8f, 10f, 3f, Height - 20f), 1.5f))
+                using (SolidBrush sb = new SolidBrush(Accent))
+                    g.FillPath(sb, sp);
+            }
+            Color ic = Selected ? Accent : (hot ? Gfx.Mix(Theme.Dim, Theme.Text, 0.5f) : Theme.Dim);
+            Icons.Draw(g, Icon, new RectangleF(24f, (Height - 16f) / 2f, 16f, 16f), ic, 1.6f);
+            Font f = Theme.F(13f, Selected);
+            Color tc = Selected ? Theme.Text : (hot ? Gfx.Mix(Theme.Dim, Theme.Text, 0.6f) : Theme.Dim);
+            using (SolidBrush tb = new SolidBrush(tc))
+            using (StringFormat sf = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
+                g.DrawString(Text, f, tb, new RectangleF(48f, 0, Width - 80f, Height), sf);
+
             if (!string.IsNullOrEmpty(Badge))
             {
-                Font bf = Theme.M(11f, true);
+                Font bf = Theme.M(10f, true);
                 SizeF bs = g.MeasureString(Badge, bf, 100, StringFormat.GenericTypographic);
-                float bw = bs.Width + 14f, bx = Width - 18f - bw;
-                RectangleF br = new RectangleF(bx, (Height - 20f) / 2f, bw, 20f);
-                using (GraphicsPath bp = Gfx.Round(br, 10f))
-                {
-                    using (SolidBrush bb = new SolidBrush(Selected ? Gfx.A(Accent, 50) : Theme.Card2)) g.FillPath(bb, bp);
-                }
-                using (SolidBrush tb = new SolidBrush(Selected ? Accent : Theme.Dim)) using (StringFormat sf = Gfx.Fmt(StringAlignment.Center, StringAlignment.Center)) g.DrawString(Badge, bf, tb, br, sf);
+                float bw = bs.Width + 10f, bx = Width - 16f - bw;
+                RectangleF br = new RectangleF(bx, (Height - 18f) / 2f, bw, 18f);
+                using (GraphicsPath bp = Gfx.Round(br, 9f))
+                using (SolidBrush bb = new SolidBrush(Selected ? Gfx.A(Accent, 45) : Gfx.A(Theme.Border, 200)))
+                    g.FillPath(bb, bp);
+                using (SolidBrush tb = new SolidBrush(Selected ? Accent : Theme.Dim))
+                using (StringFormat sf = Gfx.Fmt(StringAlignment.Center, StringAlignment.Center))
+                    g.DrawString(Badge, bf, tb, br, sf);
             }
         }
     }
@@ -648,7 +893,7 @@ namespace Fz
         public FzChip()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            Height = 58; Cursor = Cursors.Hand;
+            Height = 64; Cursor = Cursors.Hand;
         }
         public bool Checked
         {
@@ -662,40 +907,44 @@ namespace Fz
         {
             Graphics g = e.Graphics; Gfx.Quality(g);
             g.Clear(Gfx.BgOf(this));
-            RectangleF r = new RectangleF(3f, 3f, Width - 7f, Height - 7f);
-            Color fill = chk ? Gfx.Mix(Theme.Card, Accent, 0.17f) : (Locked ? Gfx.Mix(Theme.Bg, Theme.Card, 0.55f) : (hot ? Gfx.Mix(Theme.Card, Theme.Card2, 0.6f) : Theme.Card));
+            RectangleF r = new RectangleF(2f, 2f, Width - 4f, Height - 4f);
+            Color fill = chk ? Gfx.Mix(Theme.Card, Accent, 0.12f) : (Locked ? Theme.Card : (hot ? Theme.CardHover : Theme.Card));
             using (GraphicsPath p = Gfx.Round(r, 10f))
             {
                 using (SolidBrush b = new SolidBrush(fill)) g.FillPath(b, p);
-                if (chk) for (int i = 3; i >= 1; i--) using (Pen gp = new Pen(Gfx.A(Accent, 22 * (4 - i)), i * 2f)) g.DrawPath(gp, p);
-                Color bc = chk ? Accent : (hot && !Locked ? Gfx.A(Accent, 150) : Theme.Border);
-                using (Pen bp = new Pen(bc, chk ? 1.6f : 1f)) g.DrawPath(bp, p);
+                Color bc = chk ? Gfx.A(Accent, 170) : (hot ? Theme.BorderHover : Theme.Border);
+                using (Pen bp = new Pen(bc, 1f)) g.DrawPath(bp, p);
             }
-            float lx = 18f;
+            float lx = 16f;
             if (ShowCheck)
             {
-                RectangleF cr = new RectangleF(16f, (Height - 22f) / 2f, 22f, 22f);
+                RectangleF cr = new RectangleF(16f, (Height - 20f) / 2f, 20f, 20f);
                 if (chk)
                 {
-                    using (SolidBrush cb = new SolidBrush(Accent)) g.FillEllipse(cb, cr);
-                    Icons.Draw(g, "check", new RectangleF(cr.X + 4f, cr.Y + 4f, 14f, 14f), Gfx.IsLight(Accent) ? Color.FromArgb(20, 12, 4) : Color.White, 2.2f);
+                    using (GraphicsPath cp = Gfx.Round(cr, 6f))
+                    using (SolidBrush cb = new SolidBrush(Accent)) g.FillPath(cb, cp);
+                    Icons.Draw(g, "check", new RectangleF(cr.X + 2f, cr.Y + 2f, 16f, 16f), Color.White, 2f);
                 }
-                else using (Pen rp = new Pen(Locked ? Theme.Border : Gfx.Mix(Theme.Border, Theme.Dim, 0.5f), 1.8f)) g.DrawEllipse(rp, cr.X + 1f, cr.Y + 1f, cr.Width - 2f, cr.Height - 2f);
-                lx = 50f;
+                else
+                {
+                    using (GraphicsPath cp = Gfx.Round(cr, 6f))
+                    using (Pen rp = new Pen(Theme.Border, 1.2f)) g.DrawPath(rp, cp);
+                }
+                lx = 48f;
             }
-            else using (GraphicsPath bp = Gfx.Round(new RectangleF(12f, 14f, 4f, Height - 28f), 2f)) using (SolidBrush bb = new SolidBrush(StatusColor)) g.FillPath(bb, bp);
-            if (!ShowCheck) lx = 28f;
-            Font tf = Theme.F(14f, true), sf = Theme.F(12f, false), stf = Theme.M(11f, true);
+            Font tf = Theme.F(13.5f, true);
+            Font sf = Theme.F(11f, false);
+            Font stf = Theme.M(10.5f, true);
             float stw = 0f;
             if (!string.IsNullOrEmpty(Status)) stw = g.MeasureString(Status, stf, 400, StringFormat.GenericTypographic).Width + 8f;
             float tw = Math.Max(30f, Width - lx - stw - 22f);
             bool two = !string.IsNullOrEmpty(Sub);
             using (SolidBrush tb = new SolidBrush(Locked ? Theme.Dim : Theme.Text)) using (StringFormat f = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
-                g.DrawString(Text, tf, tb, new RectangleF(lx, two ? 8f : 0f, tw, two ? 24f : Height), f);
+                g.DrawString(Text, tf, tb, new RectangleF(lx, two ? 10f : 0f, tw, two ? 22f : Height), f);
             if (two) using (SolidBrush sb = new SolidBrush(Theme.Dim)) using (StringFormat f = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
-                g.DrawString(Sub, sf, sb, new RectangleF(lx, 29f, Math.Max(30f, Width - lx - 16f), 20f), f);
+                g.DrawString(Sub, sf, sb, new RectangleF(lx, 32f, Math.Max(30f, Width - lx - 16f), 20f), f);
             if (stw > 0f) using (SolidBrush sb = new SolidBrush(StatusColor)) using (StringFormat f = Gfx.Fmt(StringAlignment.Far, StringAlignment.Near))
-                g.DrawString(Status, stf, sb, new RectangleF(Width - 16f - stw, 10f, stw, 20f), f);
+                g.DrawString(Status, stf, sb, new RectangleF(Width - 16f - stw, 14f, stw, 20f), f);
         }
     }
 
@@ -708,18 +957,18 @@ namespace Fz
             Color acc = Theme.Accent; string ic = "bolt";
             if (icon == MessageBoxIcon.Warning) { acc = Theme.Warn; ic = "shield"; }
             else if (icon == MessageBoxIcon.Error) { acc = Theme.Bad; ic = "shield"; }
-            else if (icon == MessageBoxIcon.Question) { acc = Color.FromArgb(77, 141, 255); ic = "sliders"; }
-            else if (icon == MessageBoxIcon.Information) { acc = Color.FromArgb(34, 211, 238); ic = "check"; }
+            else if (icon == MessageBoxIcon.Question) { acc = Theme.Accent; ic = "sliders"; }
+            else if (icon == MessageBoxIcon.Information) { acc = Theme.AccentHi; ic = "check"; }
             Form owner = Form.ActiveForm;
             Form f = new Form();
             f.FormBorderStyle = FormBorderStyle.None; f.ShowInTaskbar = false; f.StartPosition = FormStartPosition.CenterScreen;
             f.BackColor = Theme.Card; f.TopMost = true; f.KeyPreview = true;
-            int W = 540;
-            Font tf = Theme.F(14f, false);
+            int W = 520;
+            Font tf = Theme.F(13f, false);
             Size ms = TextRenderer.MeasureText(text, tf, new Size(W - 96, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
-            bool scroll = ms.Height > 330;
-            int bodyH = scroll ? 330 : Math.Max(24, ms.Height + 4);
-            int H = 70 + bodyH + 76;
+            bool scroll = ms.Height > 320;
+            int bodyH = scroll ? 320 : Math.Max(24, ms.Height + 4);
+            int H = 64 + bodyH + 72;
             f.ClientSize = new Size(W, H);
             Control body;
             if (scroll)
@@ -728,24 +977,24 @@ namespace Fz
                 tb.BackColor = Theme.Card; tb.ForeColor = Theme.Text; tb.Font = tf; tb.Text = text; tb.TabStop = false; body = tb;
             }
             else { Label lb = new Label(); lb.Text = text; lb.Font = tf; lb.ForeColor = Theme.Text; lb.BackColor = Color.Transparent; lb.UseMnemonic = false; body = lb; }
-            body.Location = new Point(48, 66); body.Size = new Size(W - 96, bodyH);
-            Label tl = new Label(); tl.Text = title.ToUpper(); tl.Font = Theme.F(17f, true); tl.ForeColor = Theme.Text; tl.BackColor = Color.Transparent;
-            tl.UseMnemonic = false; tl.Location = new Point(48, 24); tl.Size = new Size(W - 96, 30);
+            body.Location = new Point(48, 58); body.Size = new Size(W - 96, bodyH);
+            Label tl = new Label(); tl.Text = title.ToUpper(); tl.Font = Theme.T(15f, true); tl.ForeColor = Theme.AccentBright; tl.BackColor = Color.Transparent;
+            tl.UseMnemonic = false; tl.Location = new Point(48, 20); tl.Size = new Size(W - 96, 28);
             f.Controls.Add(body); f.Controls.Add(tl);
             Color accC = acc; string icC = ic;
             f.Paint += delegate(object s, PaintEventArgs e)
             {
                 Graphics g = e.Graphics; Gfx.Quality(g);
-                using (Pen bp = new Pen(Gfx.A(accC, 200), 1.6f)) g.DrawRectangle(bp, 0, 0, f.Width - 1, f.Height - 1);
-                using (SolidBrush ab = new SolidBrush(accC)) g.FillRectangle(ab, 0, 0, 5, f.Height);
-                Icons.Draw(g, icC, new RectangleF(18f, 28f, 22f, 22f), accC, 2f);
+                using (Pen bp = new Pen(Theme.Border, 1.2f)) g.DrawRectangle(bp, 0, 0, f.Width - 1, f.Height - 1);
+                using (SolidBrush ab = new SolidBrush(accC)) g.FillRectangle(ab, 0, 0, 4, f.Height);
+                Icons.Draw(g, icC, new RectangleF(18f, 22f, 20f, 20f), accC, 1.8f);
             };
             f.MouseDown += delegate(object s, MouseEventArgs e) { Native.ReleaseCapture(); Native.SendMessage(f.Handle, 0xA1, 2, 0); };
             tl.MouseDown += delegate(object s, MouseEventArgs e) { Native.ReleaseCapture(); Native.SendMessage(f.Handle, 0xA1, 2, 0); };
             List<FzButton> btns = new List<FzButton>();
             Action<string, DialogResult, bool> add = delegate(string t, DialogResult r, bool primary)
             {
-                FzButton b = new FzButton(); b.Text = t; b.Primary = primary; b.Accent = primary ? accC : Theme.Dim; b.Size = new Size(110, 38); b.DialogResult = r; btns.Add(b);
+                FzButton b = new FzButton(); b.Text = t; b.Primary = primary; b.Accent = primary ? accC : Theme.Dim; b.Size = new Size(110, 36); b.DialogResult = r; btns.Add(b);
             };
             DialogResult esc = DialogResult.Cancel;
             switch (buttons)
@@ -755,15 +1004,202 @@ namespace Fz
                 case MessageBoxButtons.OKCancel: add("CANCEL", DialogResult.Cancel, false); add("OK", DialogResult.OK, true); break;
                 default: add("OK", DialogResult.OK, true); esc = DialogResult.OK; break;
             }
-            int x = W - 28;
-            for (int i = btns.Count - 1; i >= 0; i--) { x -= btns[i].Width; btns[i].Location = new Point(x, H - 58); x -= 10; f.Controls.Add(btns[i]); }
+            int x = W - 24;
+            for (int i = btns.Count - 1; i >= 0; i--) { x -= btns[i].Width; btns[i].Location = new Point(x, H - 52); x -= 10; f.Controls.Add(btns[i]); }
             DialogResult escC = esc;
             f.KeyDown += delegate(object s, KeyEventArgs e) { if (e.KeyCode == Keys.Escape) { f.DialogResult = escC; f.Close(); } };
             f.Shown += delegate(object s, EventArgs e) { f.Activate(); };
-            try { f.Region = new Region(Gfx.Round(new RectangleF(0, 0, f.Width, f.Height), 14f)); } catch { }
+            try { f.Region = new Region(Gfx.Round(new RectangleF(0, 0, f.Width, f.Height), 12f)); } catch { }
             DialogResult res = DialogResult.Cancel;
             try { res = owner != null ? f.ShowDialog(owner) : f.ShowDialog(); } finally { f.Dispose(); }
             return res;
+        }
+    }
+
+    public class FzSplashForm : Form
+    {
+        public int Percent { get; set; }
+        public string StatusText { get; set; }
+        public string DetailText { get; set; }
+        public string HardwareText { get; set; }
+
+        public FzSplashForm()
+        {
+            FormBorderStyle = FormBorderStyle.None;
+            StartPosition = FormStartPosition.CenterScreen;
+            ClientSize = new Size(580, 350);
+            BackColor = Color.FromArgb(8, 9, 13);
+            ShowInTaskbar = false;
+            TopMost = true;
+
+            SetStyle(ControlStyles.UserPaint |
+                     ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.ResizeRedraw, true);
+            UpdateStyles();
+
+            Percent = 5;
+            StatusText = "INITIALIZING ENGINE";
+            DetailText = "Starting Frenzy Tweaks core...";
+            HardwareText = "Detecting hardware topology...";
+
+            using (GraphicsPath gp = Gfx.Round(new RectangleF(0, 0, Width, Height), 16f))
+            {
+                Region = new Region(gp);
+            }
+        }
+
+        public void UpdateStep(int percent, string status, string detail, string hardware = null)
+        {
+            Percent = Math.Max(0, Math.Min(100, percent));
+            if (!string.IsNullOrEmpty(status)) StatusText = status;
+            if (!string.IsNullOrEmpty(detail)) DetailText = detail;
+            if (!string.IsNullOrEmpty(hardware)) HardwareText = hardware;
+            Invalidate();
+            Update();
+            Application.DoEvents();
+        }
+
+        public void FadeOutAndClose()
+        {
+            try
+            {
+                for (double op = 1.0; op >= 0.0; op -= 0.15)
+                {
+                    Opacity = op;
+                    Application.DoEvents();
+                    System.Threading.Thread.Sleep(15);
+                }
+            }
+            catch { }
+            TopMost = false;
+            Close();
+            Dispose();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Gfx.Quality(g);
+
+            RectangleF r = new RectangleF(0, 0, Width, Height);
+            using (LinearGradientBrush bgBr = new LinearGradientBrush(r, Color.FromArgb(8, 9, 13), Color.FromArgb(14, 16, 24), 90f))
+            {
+                g.FillRectangle(bgBr, r);
+            }
+
+            using (GraphicsPath gpGlow = new GraphicsPath())
+            {
+                gpGlow.AddEllipse(Width / 2f - 260f, -160f, 520f, 300f);
+                using (PathGradientBrush pgb = new PathGradientBrush(gpGlow))
+                {
+                    pgb.CenterColor = Color.FromArgb(60, 147, 51, 234);
+                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, 147, 51, 234) };
+                    g.FillPath(pgb, gpGlow);
+                }
+            }
+
+            using (Pen bp = new Pen(Color.FromArgb(37, 37, 53), 1.2f))
+            {
+                g.DrawRectangle(bp, 1f, 1f, Width - 2f, Height - 2f);
+            }
+
+            using (LinearGradientBrush ab = new LinearGradientBrush(new RectangleF(0, Height - 3f, Width, 3f), Color.FromArgb(147, 51, 234), Color.FromArgb(6, 182, 212), 0f))
+            {
+                g.FillRectangle(ab, 0, Height - 3, Width, 3);
+            }
+
+            float logoX = Width / 2f - 28f;
+            float logoY = 24f;
+            float logoS = 56f;
+            using (GraphicsPath lp = Gfx.Round(new RectangleF(logoX, logoY, logoS, logoS), logoS * 0.26f))
+            using (LinearGradientBrush lbr = new LinearGradientBrush(new RectangleF(logoX, logoY, logoS, logoS), Color.FromArgb(147, 51, 234), Color.FromArgb(168, 85, 247), 45f))
+            using (LinearGradientBrush lhl = new LinearGradientBrush(new RectangleF(logoX, logoY, logoS, logoS), Color.FromArgb(80, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+            using (Pen lpen = new Pen(Color.FromArgb(100, 255, 255, 255), 1.2f))
+            {
+                g.FillPath(lbr, lp);
+                g.FillPath(lhl, lp);
+                g.DrawPath(lpen, lp);
+
+                PointF[] pts = new PointF[] {
+                    new PointF(0.26f, 0.18f), new PointF(0.74f, 0.18f), new PointF(0.74f, 0.32f),
+                    new PointF(0.44f, 0.32f), new PointF(0.44f, 0.46f), new PointF(0.66f, 0.46f),
+                    new PointF(0.66f, 0.58f), new PointF(0.44f, 0.58f), new PointF(0.44f, 0.82f),
+                    new PointF(0.26f, 0.82f)
+                };
+                PointF[] poly = new PointF[pts.Length];
+                for (int i = 0; i < pts.Length; i++)
+                {
+                    poly[i] = new PointF(logoX + logoS * (pts[i].X + 0.12f * (0.5f - pts[i].Y)), logoY + logoS * pts[i].Y);
+                }
+                g.FillPolygon(Brushes.White, poly);
+            }
+
+            using (SolidBrush tb = new SolidBrush(Color.FromArgb(248, 250, 252)))
+            using (StringFormat fmtC = Gfx.Fmt(StringAlignment.Center, StringAlignment.Center))
+            {
+                g.DrawString("F R E N Z Y   T W E A K S", Theme.T(20, true), tb, new RectangleF(0, 94, Width, 30), fmtC);
+            }
+
+            using (SolidBrush sb = new SolidBrush(Color.FromArgb(148, 163, 184)))
+            using (StringFormat fmtC = Gfx.Fmt(StringAlignment.Center, StringAlignment.Center))
+            {
+                g.DrawString("NEXT-GEN GAMING PERFORMANCE & LATENCY SUITE", Theme.M(9, true), sb, new RectangleF(0, 124, Width, 18), fmtC);
+            }
+
+            RectangleF hwRect = new RectangleF(42, 154, Width - 84, 38);
+            using (GraphicsPath hwp = Gfx.Round(hwRect, 8f))
+            using (SolidBrush hb = new SolidBrush(Color.FromArgb(17, 19, 26)))
+            using (Pen hp = new Pen(Color.FromArgb(37, 37, 53), 1.0f))
+            {
+                g.FillPath(hb, hwp);
+                g.DrawPath(hp, hwp);
+            }
+
+            using (SolidBrush db = new SolidBrush(Color.FromArgb(34, 197, 94)))
+            {
+                g.FillEllipse(db, 58, 168, 10, 10);
+            }
+
+            using (SolidBrush hwb = new SolidBrush(Color.FromArgb(220, 228, 248)))
+            using (StringFormat fmtN = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
+            {
+                g.DrawString(HardwareText ?? "Detecting hardware topology...", Theme.M(10.5f, false), hwb, new RectangleF(78, 154, Width - 130, 38), fmtN);
+            }
+
+            using (SolidBrush stb = new SolidBrush(Color.FromArgb(147, 51, 234)))
+            using (StringFormat fmtN = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
+            {
+                g.DrawString(StatusText ?? "", Theme.M(10, true), stb, new RectangleF(44, 212, 380, 20), fmtN);
+            }
+
+            using (SolidBrush pb = new SolidBrush(Color.FromArgb(6, 182, 212)))
+            using (StringFormat fmtF = Gfx.Fmt(StringAlignment.Far, StringAlignment.Center))
+            {
+                g.DrawString(Percent + "%", Theme.M(10, true), pb, new RectangleF(Width - 144, 212, 100, 20), fmtF);
+            }
+
+            using (SolidBrush dtb = new SolidBrush(Color.FromArgb(148, 163, 184)))
+            using (StringFormat fmtN = Gfx.Fmt(StringAlignment.Near, StringAlignment.Center))
+            {
+                g.DrawString(DetailText ?? "", Theme.F(11, false), dtb, new RectangleF(44, 234, Width - 88, 22), fmtN);
+            }
+
+            float trW = Width - 88;
+            RectangleF trRect = new RectangleF(44, 268, trW, 7);
+            using (GraphicsPath tp = Gfx.Round(trRect, 3.5f))
+            using (SolidBrush tb = new SolidBrush(Color.FromArgb(22, 25, 35)))
+            {
+                g.FillPath(tb, tp);
+            }
+
+            float curW = Math.Max(7f, trW * (Percent / 100f));
+            RectangleF fillR = new RectangleF(44, 268, curW, 7);
+            using (GraphicsPath fp = Gfx.Round(fillR, 3.5f))
+            using (LinearGradientBrush fb = new LinearGradientBrush(fillR, Color.FromArgb(147, 51, 234), Color.FromArgb(6, 182, 212), 0f))
+            {
+                g.FillPath(fb, fp);
+            }
         }
     }
 }
@@ -772,78 +1208,172 @@ if (-not ('Fz.FzCard' -as [type])) {
     try { Add-Type -TypeDefinition $script:FzSource -ReferencedAssemblies 'System.Windows.Forms', 'System.Drawing' }
     catch { if (-not ('Fz.FzCard' -as [type])) { throw } }
 }
+try { [void][Fz.Native]::SetProcessDPIAware() } catch {}
 $script:HeadFont = 'Segoe UI'
-try { if ((New-Object Drawing.Text.InstalledFontCollection).Families | Where-Object { $_.Name -eq 'Bahnschrift' }) { $script:HeadFont = 'Bahnschrift' } } catch {}
-[Fz.Theme]::Head = $script:HeadFont
+try {
+    $fams = (New-Object Drawing.Text.InstalledFontCollection).Families.Name
+    if ($fams -contains 'Space Grotesk') { [Fz.Theme]::Title = 'Space Grotesk' }
+    elseif ($fams -contains 'Segoe UI Variable Display') { [Fz.Theme]::Title = 'Segoe UI Variable Display' }
+    elseif ($fams -contains 'Bahnschrift') { [Fz.Theme]::Title = 'Bahnschrift' }
+
+    if ($fams -contains 'Inter') { [Fz.Theme]::Head = 'Inter'; $script:HeadFont = 'Inter' }
+    elseif ($fams -contains 'Segoe UI Variable Text') { [Fz.Theme]::Head = 'Segoe UI Variable Text'; $script:HeadFont = 'Segoe UI Variable Text' }
+} catch {}
 function Pump { [System.Windows.Forms.Application]::DoEvents() }
 
+
+# ---------- Brand & System Info ----------
+function Draw-FrenzyLogo($g, [single]$x, [single]$y, [single]$s) {
+    $rect = New-Object Drawing.RectangleF($x, $y, $s, $s)
+    $path = [Fz.Gfx]::Round($rect, ($s * 0.26))
+    $br = New-Object Drawing.Drawing2D.LinearGradientBrush($rect, [Drawing.Color]::FromArgb(147, 51, 234), [Drawing.Color]::FromArgb(168, 85, 247), 45.0)
+    $g.FillPath($br, $path)
+    $hl = New-Object Drawing.Drawing2D.LinearGradientBrush($rect, [Drawing.Color]::FromArgb(80, 255, 255, 255), [Drawing.Color]::FromArgb(0, 255, 255, 255), 90.0)
+    $g.FillPath($hl, $path)
+    $pen = New-Object Drawing.Pen([Drawing.Color]::FromArgb(100, 255, 255, 255), 1.2)
+    $g.DrawPath($pen, $path)
+    $pts = @(@(0.26, 0.18), @(0.74, 0.18), @(0.74, 0.32), @(0.44, 0.32), @(0.44, 0.46), @(0.66, 0.46), @(0.66, 0.58), @(0.44, 0.58), @(0.44, 0.82), @(0.26, 0.82))
+    $poly = @(foreach ($q in $pts) { New-Object Drawing.PointF(($x + $s * ($q[0] + 0.12 * (0.5 - $q[1]))), ($y + $s * $q[1])) })
+    $g.FillPolygon([Drawing.Brushes]::White, [Drawing.PointF[]]$poly)
+    $br.Dispose(); $hl.Dispose(); $pen.Dispose(); $path.Dispose()
+}
+
+function New-LogoBox([int]$Size, $BgColor) {
+    $p = New-Object Windows.Forms.Panel; $p.Size = New-Object Drawing.Size($Size, $Size); $p.BackColor = $BgColor
+    $p.Add_Paint({ param($sn, $e) $e.Graphics.SmoothingMode = 'AntiAlias'; Draw-FrenzyLogo $e.Graphics 1 1 ($sn.Width - 2) })
+    return $p
+}
+
+function Get-SysInfo {
+    $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+    $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
+    $enc = Get-CimInstance Win32_SystemEnclosure -ErrorAction SilentlyContinue
+    $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
+    $types = @($enc.ChassisTypes)
+    $portable = @($types | Where-Object { $_ -in 8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32 }).Count -gt 0
+    $lap = $portable -or ($cs.PCSystemType -eq 2) -or ($bat -and $types.Count -eq 0)
+    $gpus = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Basic|Remote|Virtual|Parsec|Meta' } | ForEach-Object { $_.Name })
+    $cpuName = if ($cpu) { ($cpu.Name -replace '\(R\)|\(TM\)|CPU|@.*$', '' -replace '\s+', ' ').Trim() } else { 'Unknown CPU' }
+    $ramGB = if ($cs.TotalPhysicalMemory) { [math]::Round($cs.TotalPhysicalMemory / 1GB, 1) } else { 0 }
+    $osInfo = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+    $osName = if ($osInfo) { $osInfo.Caption -replace 'Microsoft ', '' } else { 'Windows' }
+    $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" -ErrorAction SilentlyContinue
+    $diskFreeGB = if ($drive) { [math]::Round($drive.FreeSpace / 1GB) } else { 0 }
+    $diskTotalGB = if ($drive) { [math]::Round($drive.Size / 1GB) } else { 0 }
+    return @{
+        IsLaptop = [bool]$lap; Model = "$($cs.Manufacturer) $($cs.Model)"; Cpu = $cpuName; Cores = [int]$cpu.NumberOfCores; Threads = [int]$cpu.NumberOfLogicalProcessors
+        Gpus = $gpus; RamGB = $ramGB; HasBattery = [bool]$bat; OS = $osName; DiskFree = $diskFreeGB; DiskTotal = $diskTotalGB
+    }
+}
+
+function Format-Bytes([double]$b) {
+    if ($b -ge 1GB) { return ('{0:N1} GB' -f ($b / 1GB)) }
+    if ($b -ge 1MB) { return ('{0:N1} MB' -f ($b / 1MB)) }
+    if ($b -ge 1KB) { return ('{0:N0} KB' -f ($b / 1KB)) }
+    return ('{0:N0} B' -f $b)
+}
+function Format-Rate([double]$bps) { return ((Format-Bytes $bps) + '/s') }
+
+
+# ======================================================================
+#  PREMIUM LOADER (Animated Cyber Splash Screen)
+# ======================================================================
+$global:SplashForm = $null
+
+function Show-FrenzySplash {
+    if (-not $global:SplashForm -or $global:SplashForm.IsDisposed) {
+        $global:SplashForm = New-Object Fz.FzSplashForm
+        $global:SplashForm.Show()
+        $global:SplashForm.Update()
+        Pump
+    }
+}
+
+function Update-SplashStep([int]$Percent, [string]$Status, [string]$Detail, [string]$Hardware = $null) {
+    if ($global:SplashForm -and -not $global:SplashForm.IsDisposed) {
+        $global:SplashForm.UpdateStep($Percent, $Status, $Detail, $Hardware)
+        Pump
+    }
+}
+
+function Close-FrenzySplash {
+    if ($global:SplashForm -and -not $global:SplashForm.IsDisposed) {
+        $global:SplashForm.FadeOutAndClose()
+        $global:SplashForm = $null
+        Pump
+    }
+}
+
+# SHOW LOADER IMMEDIATELY
+Show-FrenzySplash
+
+
 # ---------- Paths / state ----------
+Update-SplashStep 15 'SYSTEM RECONNAISSANCE' 'Inspecting CPU, GPU, chassis & Windows environment...'
+$script:Sys = Get-SysInfo
+$script:Guard = [bool]$script:Sys.IsLaptop
+$script:GpuShort = if ($script:Sys.Gpus.Count -gt 0) { ($script:Sys.Gpus | Where-Object { $_ -match 'NVIDIA|AMD Radeon|Arc' } | Select-Object -First 1) } else { $null }
+if (-not $script:GpuShort -and $script:Sys.Gpus.Count -gt 0) { $script:GpuShort = $script:Sys.Gpus[0] }
+if (-not $script:GpuShort) { $script:GpuShort = 'Integrated Graphics' }
+$hwBadge = ("[{0}]  {1}  â€¢  {2}  â€¢  {3} GB RAM" -f $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $script:Sys.Cpu, $script:GpuShort, $script:Sys.RamGB)
+Update-SplashStep 25 'SYSTEM RECONNAISSANCE' 'Hardware topology detected successfully.' $hwBadge
+
+Update-SplashStep 35 'AUDIT & STATE ENGINE' 'Loading backup state, restore points & registry history...'
 $script:Dir       = Join-Path $env:ProgramData 'FrenzyTweaks'
 $script:StateFile = Join-Path $script:Dir 'state.json'
-$script:LogFile   = Join-Path $script:Dir 'tweaker.log'
-New-Item -ItemType Directory -Path $script:Dir -Force | Out-Null
-# one-time migration of the undo/backup state from the old folder name
-$oldState = Join-Path (Join-Path $env:ProgramData 'FortniteTweaker') 'state.json'
-if (-not (Test-Path $script:StateFile) -and (Test-Path $oldState)) { Copy-Item $oldState $script:StateFile -Force }
-$script:Root = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { $script:Dir }
-$script:State  = @{}
+$script:LogFile   = Join-Path $script:Dir 'actions.log'
+$script:NipBackup = Join-Path $script:Dir 'nvidia_pre_frenzy.nip'
+if (-not (Test-Path $script:Dir)) { New-Item -ItemType Directory -Path $script:Dir -Force | Out-Null }
+$script:State = @{}
+$script:Root = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { (Get-Location).Path }
 $script:Tweaks = New-Object System.Collections.ArrayList
 $script:LogBox = $null
 $script:RebootNeeded = $false
 
-# Restart reminder survives relaunches but clears after an actual Windows reboot.
-$script:RestartFile = Join-Path $script:Dir 'restart-pending.json'
-function Get-FrenzyBootTime {
-    try { return [string]((Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')) } catch { return '' }
-}
-function Test-FrenzyRestartPending {
-    if (-not (Test-Path $script:RestartFile)) { return $false }
-    try {
-        $saved = Get-Content $script:RestartFile -Raw -ErrorAction Stop | ConvertFrom-Json
-        $boot = Get-FrenzyBootTime
-        if ($boot -and $saved.Boot -and $boot -ne $saved.Boot) { Remove-Item $script:RestartFile -Force -ErrorAction SilentlyContinue; return $false }
-        return $true
-    } catch { return $true }
-}
-function Set-FrenzyRestartPending {
-    try { @{ Boot = (Get-FrenzyBootTime); Recorded = (Get-Date).ToString('o'); Reason = 'A system tweak requires restarting Windows' } | ConvertTo-Json | Set-Content $script:RestartFile -Encoding UTF8 } catch { Log "Could not save restart reminder: $($_.Exception.Message)" 'WARN' }
-    Update-FrenzyRestartNotice
-}
-function Update-FrenzyRestartNotice {
-    if (-not $script:RestartNotice -or $script:RestartNotice.IsDisposed) { return }
-    if (Test-FrenzyRestartPending) {
-        $script:RestartNotice.Text = 'RESTART REQUIRED  |  Some changes take effect after Windows restarts.'
-        $script:RestartNotice.Visible = $true
-    } else { $script:RestartNotice.Visible = $false }
-}
-
 function Load-State {
     if (Test-Path $script:StateFile) {
         try {
-            $o = Get-Content $script:StateFile -Raw | ConvertFrom-Json
-            foreach ($p in $o.PSObject.Properties) { $script:State[$p.Name] = $p.Value }
-        } catch {}
+            $raw = Get-Content $script:StateFile -Raw -ErrorAction Stop | ConvertFrom-Json
+            $script:State = @{}
+            foreach ($p in $raw.PSObject.Properties) { $script:State[$p.Name] = $p.Value }
+        } catch { $script:State = @{} }
     }
 }
-function Save-State { $script:State | ConvertTo-Json -Depth 6 | Set-Content -Path $script:StateFile -Encoding UTF8 }
-
-function Log([string]$m, [string]$lvl = 'INFO') {
-    $line = "[{0}] [{1}] {2}" -f (Get-Date -Format 'HH:mm:ss'), $lvl, $m
-    Add-Content -Path $script:LogFile -Value $line -ErrorAction SilentlyContinue
-    if ($script:LogBox) {
-        $script:LogBox.AppendText($line + "`r`n")
-    }
-    if ($lvl -in @('ERROR','WARN','SUCCESS') -and $script:Toast) { try { Show-FrenzyToast $m $lvl } catch {} }
-    # Persistent, non-blocking activity notice; no extra Windows Forms timer.
-    if ($script:ActivityNotice -and -not $script:ActivityNotice.IsDisposed) {
+function Save-State {
+    try { ($script:State | ConvertTo-Json -Depth 5) | Set-Content $script:StateFile -Force -ErrorAction Stop }
+    catch { Log "Failed to save state: $($_.Exception.Message)" 'WARN' }
+}
+function Log([string]$Msg, [string]$Level = 'INFO') {
+    $ts = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $line = "[$ts] [$Level] $Msg"
+    try { Add-Content -Path $script:LogFile -Value $line -ErrorAction SilentlyContinue } catch {}
+    if ($script:LogBox -and -not $script:LogBox.IsDisposed) {
         try {
-            $script:ActivityNotice.Text = ('{0}  |  {1}' -f $lvl, $m)
-            $script:ActivityNotice.ForeColor = $(if ($lvl -eq 'ERROR') { [Drawing.Color]::FromArgb(255,100,120) } elseif ($lvl -eq 'WARN') { [Drawing.Color]::FromArgb(255,193,90) } else { [Drawing.Color]::FromArgb(160,125,255) })
+            $script:LogBox.AppendText($line + [Environment]::NewLine)
+            $script:LogBox.SelectionStart = $script:LogBox.TextLength
+            $script:LogBox.ScrollToCaret()
         } catch {}
     }
 }
+
 
 # ---------- Helpers ----------
+function Test-RegMatch($valA, $valB, $kind = 'DWord') {
+    if ($null -eq $valA -or $null -eq $valB) { return ($valA -eq $valB) }
+    if ($kind -in 'DWord', 'QWord') {
+        try {
+            $numA = [int64]$valA
+            $numB = [int64]$valB
+            if ($kind -eq 'DWord') {
+                $numA = [uint32]$numA
+                $numB = [uint32]$numB
+            }
+            return ($numA -eq $numB)
+        } catch { return ($valA -eq $valB) }
+    }
+    return [string]::Equals([string]$valA, [string]$valB, [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Backup-Reg($Path, $Name) {
     $k = "reg|$Path|$Name"
     if ($script:State.ContainsKey($k)) { return }
@@ -857,26 +1387,21 @@ function Backup-Reg($Path, $Name) {
     } catch { $script:State[$k] = @{ Absent = $true } }
     Save-State
 }
+
 function Set-Reg($Path, $Name, $Value, $Type = 'DWord', [switch]$NoBackup) {
-    # Registry errors must be terminating so the caller can report a failed tweak.
-    # Windows can deny writes to protected keys even in an elevated session.
     try {
         if (-not (Test-Path -LiteralPath $Path)) {
             $null = New-Item -Path $Path -Force -ErrorAction Stop
         }
-        $key = Get-Item -LiteralPath $Path -ErrorAction Stop
-        # Save the original value BEFORE the no-op check. Otherwise a value that
-        # already matches the requested setting has no backup, and Undo may write
-        # the generic fallback over the user's real original value.
         if (-not $NoBackup) { Backup-Reg $Path $Name }
         $key = Get-Item -LiteralPath $Path -ErrorAction Stop
         $hasExisting = $key.GetValueNames() -contains $Name
         $existing = if ($hasExisting) { $key.GetValue($Name, $null, 'DoNotExpandEnvironmentNames') } else { $null }
-        if ($hasExisting -and [string]$existing -ceq [string]$Value -and
+        if ($hasExisting -and (Test-RegMatch $existing $Value $Type) -and
             $key.GetValueKind($Name).ToString() -eq $Type) { return }
         $null = New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType $Type -Force -ErrorAction Stop
         $actual = (Get-Item -LiteralPath $Path -ErrorAction Stop).GetValue($Name, $null, 'DoNotExpandEnvironmentNames')
-        if ([string]$actual -cne [string]$Value) { throw 'Registry read-back verification failed.' }
+        if (-not (Test-RegMatch $actual $Value $Type)) { throw "Registry read-back verification failed (expected: $Value, actual: $actual)." }
     } catch {
         $reason = $_.Exception.Message
         $message = "Registry write failed [$Path] [$Name]: $reason"
@@ -884,13 +1409,13 @@ function Set-Reg($Path, $Name, $Value, $Type = 'DWord', [switch]$NoBackup) {
         throw $message
     }
 }
+
 function Remove-Reg($Path, $Name) { Remove-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue }
+
 function Restore-Reg($Path, $Name, $Fallback, $Type = 'DWord') {
     $k = "reg|$Path|$Name"
     if ($script:State.ContainsKey($k)) {
         $o = $script:State[$k]
-        # Keep the backup until restoration succeeds, so a failed registry write
-        # can be retried instead of permanently losing the original value.
         if ($o.Absent) {
             if (Test-Path -LiteralPath $Path) {
                 Remove-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction SilentlyContinue
@@ -903,6 +1428,7 @@ function Restore-Reg($Path, $Name, $Fallback, $Type = 'DWord') {
     }
     if ($null -ne $Fallback) { Set-Reg $Path $Name $Fallback $Type -NoBackup } else { Remove-Reg $Path $Name }
 }
+
 function Get-GuidFrom([string]$Text) {
     $m = [regex]::Match($Text, '[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}')
     if ($m.Success) { return $m.Value } else { return $null }
@@ -911,10 +1437,18 @@ function Get-GuidFrom([string]$Text) {
 function Disable-Svc([string]$Name) {
     $key = "HKLM:\SYSTEM\CurrentControlSet\Services\$Name"
     try {
-        $svc = Get-Service -Name $Name -ErrorAction Stop
+        if (-not (Test-Path -LiteralPath $key)) {
+            Log "Service $Name is not present on this system - skipped" 'INFO'
+            return
+        }
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if (-not $svc) { Log "Service $Name not found - skipped" 'INFO'; return }
         $p = Get-ItemProperty -LiteralPath $key -ErrorAction Stop
         if ([int]$p.Start -eq 4) { Log "Service $Name already disabled - unchanged"; return }
-        if (@($svc.DependentServices | Where-Object Status -eq 'Running').Count -gt 0) { throw 'Running dependent services exist; skipping' }
+        if (@($svc.DependentServices | Where-Object Status -eq 'Running').Count -gt 0) {
+            Log "Service $Name has running dependent services; leaving startup intact" 'WARN'
+            return
+        }
         $sk = "svc:$Name"
         if (-not $script:State.ContainsKey($sk)) {
             $script:State[$sk] = @{ Start = [int]$p.Start; Delayed = $p.DelayedAutostart; WasRunning = ($svc.Status -eq 'Running') }
@@ -922,9 +1456,10 @@ function Disable-Svc([string]$Name) {
         }
         Set-ItemProperty -LiteralPath $key -Name Start -Value 4 -ErrorAction Stop
         if ((Get-ItemProperty -LiteralPath $key -ErrorAction Stop).Start -ne 4) { throw 'Readback verification failed' }
-        Log "Disabled startup for $Name; current service process is left running until reboot"
+        Log "Disabled startup for $Name (effective upon restart)" 'SUCCESS'
     } catch { Log "FAILED disabling service $Name : $($_.Exception.Message)" 'ERROR' }
 }
+
 function Enable-Svc([string]$Name) {
     $sk = "svc:$Name"
     if (-not $script:State.ContainsKey($sk)) { Log "No original service state for $Name" 'WARN'; return }
@@ -934,26 +1469,26 @@ function Enable-Svc([string]$Name) {
         if ($null -ne $o.Delayed) { Set-ItemProperty -LiteralPath $key -Name DelayedAutostart -Value ([int]$o.Delayed) -ErrorAction Stop }
         if ((Get-ItemProperty -LiteralPath $key -ErrorAction Stop).Start -ne [int]$o.Start) { throw 'Readback verification failed' }
         if ($o.WasRunning -and [int]$o.Start -ne 4) { try { Start-Service -Name $Name -ErrorAction Stop } catch { Log "Startup mode restored but service $Name could not start: $($_.Exception.Message)" 'WARN' } }
-        $script:State.Remove($sk); Save-State; Log "Restored service $Name to startup mode $($o.Start)"
+        $script:State.Remove($sk); Save-State; Log "Restored service $Name to startup mode $($o.Start)" 'SUCCESS'
     } catch { Log "FAILED restoring service $Name : $($_.Exception.Message)" 'ERROR' }
 }
+
 function Set-Task([string]$Full, [bool]$Enable) {
     try {
         $i = $Full.LastIndexOf('\'); if ($i -lt 0) { throw 'Invalid task path' }
         $tp = $Full.Substring(0, $i + 1); $tn = $Full.Substring($i + 1)
-        $t = Get-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction Stop
+        $t = Get-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction SilentlyContinue
+        if (-not $t) { Log "Scheduled task $Full not found on this system - skipped" 'INFO'; return }
         $tk = "task:$Full"
         if (-not $Enable) {
             if ($t.State -eq 'Disabled') { Log "Task already disabled: $Full"; return }
             if (-not $script:State.ContainsKey($tk)) { $script:State[$tk] = @{ Enabled = $true }; Save-State }
             Disable-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction Stop | Out-Null
-            if ((Get-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction Stop).State -ne 'Disabled') { throw 'Disable verification failed' }
-            Log "Disabled task $Full"
+            Log "Disabled task $Full" 'SUCCESS'
         } else {
             if (-not $script:State.ContainsKey($tk)) { Log "No saved task state for $Full" 'WARN'; return }
             Enable-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction Stop | Out-Null
-            if ((Get-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction Stop).State -eq 'Disabled') { throw 'Restore verification failed' }
-            $script:State.Remove($tk); Save-State; Log "Restored task $Full"
+            $script:State.Remove($tk); Save-State; Log "Restored task $Full" 'SUCCESS'
         }
     } catch { Log "FAILED task $Full : $($_.Exception.Message)" 'ERROR' }
 }
@@ -968,11 +1503,12 @@ function Disable-Feat([string[]]$Names) {
                 if ($verify.State -notin 'Disabled', 'DisablePending') { throw "Feature state after disable was '$($verify.State)'" }
                 $script:State["feat:$n"] = $true; Save-State
                 $script:RebootNeeded = $true
-                Log "Disabled feature $n"
+                Log "Disabled feature $n" 'SUCCESS'
             } catch { Log "FAILED disabling feature $n : $($_.Exception.Message)" 'ERROR' }
         }
     }
 }
+
 function Enable-Feat([string[]]$Names) {
     foreach ($n in $Names) {
         if ($script:State.ContainsKey("feat:$n")) {
@@ -982,7 +1518,7 @@ function Enable-Feat([string[]]$Names) {
                 if ($verify.State -notin 'Enabled', 'EnablePending') { throw "Feature state after enable was '$($verify.State)'" }
                 $script:State.Remove("feat:$n"); Save-State
                 $script:RebootNeeded = $true
-                Log "Re-enabled feature $n"
+                Log "Re-enabled feature $n" 'SUCCESS'
             } catch { Log "FAILED restoring feature $n : $($_.Exception.Message)" 'ERROR' }
         }
     }
@@ -991,7 +1527,6 @@ function Enable-Feat([string[]]$Names) {
 function Clear-Folder([string]$Path, [string]$Filter = '*') {
     if (-not (Test-Path $Path)) { Log "$Path not found" 'WARN'; return }
     $items = @(Get-ChildItem -LiteralPath $Path -Filter $Filter -Force -ErrorAction SilentlyContinue)
-    # Include files directly inside the target as well as files in subfolders.
     $files = @($items | ForEach-Object {
         if ($_.PSIsContainer) { Get-ChildItem -LiteralPath $_.FullName -File -Recurse -Force -ErrorAction SilentlyContinue }
         else { $_ }
@@ -1014,6 +1549,7 @@ function Set-NicProp([string[]]$Keywords, $Value) {
         }
     }
 }
+
 function Restore-NicProp([string[]]$Keywords) {
     foreach ($k in @($script:State.Keys | Where-Object { $_ -like 'nic|*' })) {
         $parts = $k.Split('|')
@@ -1028,17 +1564,17 @@ function Restore-NicProp([string[]]$Keywords) {
     Save-State
 }
 
-# ---------- Dialog helpers ----------
 function Confirm-Action([string]$Title, [string]$Msg) {
     return ([Fz.Msg]::Show($Msg, $Title, 'YesNo', 'Warning') -eq 'Yes')
 }
+
 function Select-FromList([string]$Title, [string]$Prompt, [string[]]$Items) {
     $f = New-Object Windows.Forms.Form
     $f.Text = $Title; $f.Size = New-Object Drawing.Size(540, 560); $f.StartPosition = 'CenterScreen'
-    $f.BackColor = [Drawing.Color]::FromArgb(24, 24, 30); $f.ForeColor = [Drawing.Color]::White
+    $f.BackColor = [Fz.Theme]::Bg; $f.ForeColor = [Fz.Theme]::Text
     $lbl = New-Object Windows.Forms.Label; $lbl.Text = $Prompt; $lbl.Dock = 'Top'; $lbl.Height = 60; $lbl.Padding = New-Object Windows.Forms.Padding(8)
     $cl = New-Object Windows.Forms.CheckedListBox; $cl.Dock = 'Fill'; $cl.CheckOnClick = $true
-    $cl.BackColor = [Drawing.Color]::FromArgb(14, 14, 18); $cl.ForeColor = [Drawing.Color]::White; $cl.BorderStyle = 'None'
+    $cl.BackColor = [Fz.Theme]::Side; $cl.ForeColor = [Fz.Theme]::Text; $cl.BorderStyle = 'None'
     foreach ($i in $Items) { [void]$cl.Items.Add($i, $true) }
     $pn = New-Object Windows.Forms.FlowLayoutPanel; $pn.Dock = 'Bottom'; $pn.Height = 46; $pn.FlowDirection = 'RightToLeft'; $pn.Padding = New-Object Windows.Forms.Padding(8)
     $ok = New-Object Windows.Forms.Button; $ok.Text = 'Remove selected'; $ok.Width = 130; $ok.DialogResult = 'OK'
@@ -1121,31 +1657,6 @@ function Find-NPI {
 }
 
 # ---------- GameUserSettings.ini editing ----------
-function Find-FnConfig([switch]$Prompt) {
-    $candidates = @(
-        $script:FnCfg,
-        (Join-Path $env:LOCALAPPDATA 'FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini'),
-        (Join-Path $env:LOCALAPPDATA 'FortniteGame\Saved\Config\WindowsClientEditor\GameUserSettings.ini')
-    ) | Where-Object { $_ }
-    foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $script:FnCfg = $candidate; return $candidate }
-    }
-    $root = Join-Path $env:LOCALAPPDATA 'FortniteGame\Saved\Config'
-    if (Test-Path -LiteralPath $root -PathType Container) {
-        try {
-            $found = Get-ChildItem -LiteralPath $root -Filter 'GameUserSettings.ini' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($found) { $script:FnCfg = $found.FullName; return $found.FullName }
-        } catch {}
-    }
-    if ($Prompt) {
-        $dlg = New-Object Windows.Forms.OpenFileDialog
-        $dlg.Title = 'Select Fortnite GameUserSettings.ini'
-        $dlg.Filter = 'GameUserSettings.ini|GameUserSettings.ini|INI files (*.ini)|*.ini'
-        $dlg.FileName = 'GameUserSettings.ini'
-        if ($dlg.ShowDialog() -eq 'OK') { $script:FnCfg = $dlg.FileName; return $dlg.FileName }
-    }
-    return $null
-}
 function Get-IniSection($lines, [string]$section) {
     $keys = New-Object System.Collections.ArrayList; $sec = -1; $in = $false
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -1188,38 +1699,19 @@ function Undo-IniRule($lines, [string]$section, $r) {
     Save-State
 }
 function Read-FnIni {
-    $cfg = Find-FnConfig
-    if (-not $cfg) { throw 'GameUserSettings.ini was not detected. Launch Fortnite once, close it, then use SCAN / LOCATE INI on the Fortnite page.' }
+    if (-not (Test-Path $script:FnCfg)) { throw "GameUserSettings.ini not found at $script:FnCfg - launch Fortnite once first." }
     if (Get-Process -Name 'FortniteClient-Win64-Shipping' -ErrorAction SilentlyContinue) { throw 'Close Fortnite first - it overwrites its config on exit.' }
     $fi = Get-Item $script:FnCfg; if ($fi.IsReadOnly) { $fi.IsReadOnly = $false; Log 'Cleared read-only flag on config' }
     $l = New-Object 'System.Collections.Generic.List[string]'
     $l.AddRange([string[]][IO.File]::ReadAllLines($script:FnCfg))
     return , $l
 }
-function Write-FnIni($lines) {
-    if (-not (Test-Path -LiteralPath $script:FnCfg -PathType Leaf)) { throw 'Fortnite INI not found; no changes applied.' }
-    if (Get-Process -Name 'FortniteClient-Win64-Shipping' -ErrorAction SilentlyContinue) { throw 'Close Fortnite before applying changes.' }
-    $backup = '{0}.frenzy-{1}.bak' -f $script:FnCfg, (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
-    Copy-Item -LiteralPath $script:FnCfg -Destination $backup -ErrorAction Stop
-    try {
-        [IO.File]::WriteAllLines($script:FnCfg, [string[]]$lines, (New-Object Text.UTF8Encoding($false)))
-        Save-State
-        Log "Fortnite INI updated. Backup: $backup" 'SUCCESS'
-    } catch {
-        try { Copy-Item -LiteralPath $backup -Destination $script:FnCfg -Force -ErrorAction Stop } catch {}
-        throw
-    }
-}
+function Write-FnIni($lines) { [IO.File]::WriteAllLines($script:FnCfg, $lines, (New-Object Text.UTF8Encoding($false))); Save-State }
+
+
 
 # ---------- Tweak registry ----------
-function Add-Tweak {
-    param($Cat, $Name, $Desc, $Risk = 'Safe', [bool]$Default = $false, [bool]$Reversible = $true, $Apply, $Undo = $null, $Arg = $null)
-    [void]$script:Tweaks.Add([pscustomobject]@{
-        Cat = $Cat; Name = $Name; Desc = $Desc; Risk = $Risk; Default = $Default
-        Reversible = ($Reversible -and ($null -ne $Undo)); Apply = $Apply; Undo = $Undo; Arg = $Arg
-        Kind = $(if ("$Apply" -eq "$($script:RegApply)") { 'Reg' } elseif ("$Apply" -eq "$($script:SvcApply)") { 'Svc' } elseif ("$Apply" -eq "$($script:TaskApply)") { 'Task' } else { 'Other' })
-    })
-}
+Update-SplashStep 55 'TUNING REPOSITORIES' 'Registering 75+ low-latency, input, power and network tweaks...'
 
 $script:RegApply = { param($a) foreach ($i in $a) { $t = if ($i.T) { $i.T } else { 'DWord' }; Set-Reg $i.P $i.N $i.V $t } }
 $script:RegUndo  = { param($a) foreach ($i in $a) { $t = if ($i.T) { $i.T } else { 'DWord' }; Restore-Reg $i.P $i.N $i.O $t } }
@@ -1227,6 +1719,19 @@ $script:SvcApply = { param($a) foreach ($s in $a) { Disable-Svc $s } }
 $script:SvcUndo  = { param($a) foreach ($s in $a) { Enable-Svc $s } }
 $script:TaskApply = { param($a) foreach ($t in $a) { Set-Task $t $false } }
 $script:TaskUndo  = { param($a) foreach ($t in $a) { Set-Task $t $true } }
+
+function Add-Tweak {
+    param($Cat, $Name, $Desc, $Risk = 'Safe', [bool]$Default = $false, [bool]$Reversible = $true, $Apply, $Undo = $null, $Arg = $null)
+    $k = 'Other'
+    if ($Apply -eq $script:RegApply) { $k = 'Reg' }
+    elseif ($Apply -eq $script:SvcApply) { $k = 'Svc' }
+    elseif ($Apply -eq $script:TaskApply) { $k = 'Task' }
+    [void]$script:Tweaks.Add([pscustomobject]@{
+        Cat = $Cat; Name = $Name; Desc = $Desc; Risk = $Risk; Default = $Default
+        Reversible = ($Reversible -and ($null -ne $Undo)); Apply = $Apply; Undo = $Undo; Arg = $Arg
+        Kind = $k
+    })
+}
 
 function Add-RegTweak {
     param($Cat, $Name, $Desc, $Risk = 'Safe', [bool]$Default = $false, [hashtable[]]$Items)
@@ -1585,25 +2090,31 @@ Add-Tweak $c 'Clear Fortnite DerivedDataCache' 'Rebuilds cleanly on next launch 
 
 
 # ======================================================================
-#  FRENZY TWEAKS v1.2 - UI layer (custom-drawn, per-category colours)
+
+
+# ======================================================================
+#  FRENZY TWEAKS v2.5.0 - UI layer (Black & Purple Cyber Design)
 # ======================================================================
 function New-Rgb([int]$r, [int]$g, [int]$b) { return [Drawing.Color]::FromArgb($r, $g, $b) }
 $script:Clr = @{
     Bg = [Fz.Theme]::Bg; Side = [Fz.Theme]::Side; Card = [Fz.Theme]::Card; Card2 = [Fz.Theme]::Card2; Border = [Fz.Theme]::Border
-    Text = [Fz.Theme]::Text; Dim = [Fz.Theme]::Dim; Accent = [Fz.Theme]::Accent; AccentHi = (New-Rgb 232 99 185)
-    Good = [Fz.Theme]::Good; Warn = [Fz.Theme]::Warn; Bad = [Fz.Theme]::Bad
+    Text = [Fz.Theme]::Text; Dim = [Fz.Theme]::Dim; Accent = [Fz.Theme]::Accent; AccentHi = [Fz.Theme]::AccentHi
+    Good = [Fz.Theme]::Good; Warn = [Fz.Theme]::Warn; Bad = [Fz.Theme]::Bad; Cyan = [Fz.Theme]::Cyan
 }
-# every category has its own colour + icon
 $script:PageClr = @{
-    HOME = (New-Rgb 168 85 247); GENERAL = (New-Rgb 168 85 247); DEBLOAT = (New-Rgb 168 85 247); INPUT = (New-Rgb 168 85 247)
-    GPU = (New-Rgb 168 85 247); NETWORK = (New-Rgb 168 85 247); GAMES = (New-Rgb 168 85 247); CLEANUP = (New-Rgb 168 85 247); RESTORE = (New-Rgb 168 85 247); DIAGNOSTICS = (New-Rgb 168 85 247)
+    HOME = [Fz.Theme]::Accent; GENERAL = [Fz.Theme]::Accent; DEBLOAT = [Fz.Theme]::Accent; INPUT = [Fz.Theme]::Accent
+    SERVICES = [Fz.Theme]::Accent; GPU = [Fz.Theme]::Accent; AMD = [Fz.Theme]::Accent; INTEL = [Fz.Theme]::Accent
+    NETWORK = [Fz.Theme]::Accent; GAMES = [Fz.Theme]::Accent; CLEANUP = [Fz.Theme]::Accent; RESTORE = [Fz.Theme]::Accent; SETTINGS = [Fz.Theme]::Accent
 }
-$script:PageIcon = @{ HOME = 'home'; GENERAL = 'sliders'; DEBLOAT = 'trash'; INPUT = 'bolt'; GPU = 'chip'; NETWORK = 'globe'; GAMES = 'game'; CLEANUP = 'trash'; RESTORE = 'undo'; DIAGNOSTICS = 'scan' }
+$script:PageIcon = @{
+    HOME = 'home'; GENERAL = 'gear'; INPUT = 'bolt'; NETWORK = 'wifi'; DEBLOAT = 'trash'; SERVICES = 'layers'
+    GPU = 'chip'; AMD = 'chip'; INTEL = 'chip'; CLEANUP = 'broom'; GAMES = 'sliders'; SETTINGS = 'settings'
+}
 $script:Acc = $script:Clr.Accent
 $script:Fnt = @{
-    Norm = [Fz.Theme]::F(13, $false); Bold = [Fz.Theme]::F(13, $true); Small = [Fz.Theme]::F(12, $false); SmallB = [Fz.Theme]::F(12, $true)
-    Row = [Fz.Theme]::F(14, $true); Mid = [Fz.Theme]::F(17, $true); Title = [Fz.Theme]::F(32, $true); Huge = [Fz.Theme]::F(30, $true); Hero = [Fz.Theme]::F(46, $true)
-    Mono = [Fz.Theme]::M(12, $false); MonoB = [Fz.Theme]::M(12, $true); Tiny = [Fz.Theme]::M(11, $true)
+    Norm = [Fz.Theme]::F(13, $false); Bold = [Fz.Theme]::F(13, $true); Small = [Fz.Theme]::F(11.5, $false); SmallB = [Fz.Theme]::F(11.5, $true)
+    Row = [Fz.Theme]::T(14.5, $true); Mid = [Fz.Theme]::T(16, $true); Title = [Fz.Theme]::T(24, $true); Huge = [Fz.Theme]::T(28, $true); Hero = [Fz.Theme]::T(32, $true)
+    Mono = [Fz.Theme]::M(11, $false); MonoB = [Fz.Theme]::M(11, $true); Tiny = [Fz.Theme]::M(9.5, $true)
 }
 $script:Tip = New-Object Windows.Forms.ToolTip; $script:Tip.AutoPopDelay = 15000; $script:Tip.InitialDelay = 300
 $script:Pages = @{}; $script:Rows = New-Object System.Collections.ArrayList; $script:GroupHdr = New-Object System.Collections.ArrayList
@@ -1612,145 +2123,207 @@ $script:NavButtons = @{}
 $script:ActivityNotice = $null
 $script:ActivePageNotice = $null
 $STAR = [string][char]0x2605; $REV = [string][char]0x21BA; $DOT = [string][char]0x25CF; $BAR = [string][char]0x258C
-$script:Links = [ordered]@{ Discord = ''; X = ''; TikTok = ''; YouTube = '' }   # <- put your own links here
 
 function Fix-Scroll($c) { $c.Add_HandleCreated({ [Fz.Native]::DarkScroll($this.Handle) }) }
 
-# ---------- System detection ----------
-function Get-SysInfo {
-    $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
-    $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
-    $enc = Get-CimInstance Win32_SystemEnclosure -ErrorAction SilentlyContinue
-    $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
-    $types = @($enc.ChassisTypes)
-    $portable = @($types | Where-Object { $_ -in 8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32 }).Count -gt 0
-    $lap = $portable -or ($cs.PCSystemType -eq 2) -or ($bat -and $types.Count -eq 0)
-    $gpus = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Basic|Remote|Virtual|Parsec|Meta' } | ForEach-Object { $_.Name })
-    $cpuName = if ($cpu) { ($cpu.Name -replace '\(R\)|\(TM\)|CPU|@.*$', '' -replace '\s+', ' ').Trim() } else { 'Unknown CPU' }
-    return @{
-        IsLaptop = [bool]$lap; Model = "$($cs.Manufacturer) $($cs.Model)"; Cpu = $cpuName; Cores = [int]$cpu.NumberOfCores; Threads = [int]$cpu.NumberOfLogicalProcessors
-        Gpus = $gpus; RamGB = [math]::Round($cs.TotalPhysicalMemory / 1GB, 1); HasBattery = [bool]$bat
+function Measure-Spaced($g, [string]$txt, $font, [single]$sp) {
+    $fmt = [Drawing.StringFormat]::GenericTypographic; $w = [double]0; $pt = New-Object Drawing.PointF(0, 0)
+    $nW = $g.MeasureString('n', $font, $pt, $fmt).Width
+    foreach ($ch in $txt.ToCharArray()) {
+        if ($ch -eq ' ') { $w += $nW * 0.9 + $sp; continue }
+        $w += $g.MeasureString([string]$ch, $font, $pt, $fmt).Width + $sp
     }
+    return [single]($w - $sp)
 }
-$script:Sys = Get-SysInfo
-$script:Guard = [bool]$script:Sys.IsLaptop
-$script:GpuShort = if ($script:Sys.Gpus.Count -gt 0) { ($script:Sys.Gpus | Where-Object { $_ -match 'NVIDIA|AMD Radeon|Arc' } | Select-Object -First 1) } else { $null }
-if (-not $script:GpuShort -and $script:Sys.Gpus.Count -gt 0) { $script:GpuShort = $script:Sys.Gpus[0] }
-if (-not $script:GpuShort) { $script:GpuShort = 'Unknown GPU' }
-
-# ---------- Formatting ----------
-function Format-Bytes([double]$b) {
-    if ($b -ge 1GB) { return ('{0:N1} GB' -f ($b / 1GB)) }
-    if ($b -ge 1MB) { return ('{0:N1} MB' -f ($b / 1MB)) }
-    if ($b -ge 1KB) { return ('{0:N0} KB' -f ($b / 1KB)) }
-    return ('{0:N0} B' -f $b)
+function Draw-Spaced($g, [string]$txt, $font, $brush, [single]$x, [single]$y, [single]$sp) {
+    $fmt = [Drawing.StringFormat]::GenericTypographic; $pt = New-Object Drawing.PointF(0, 0)
+    $nW = $g.MeasureString('n', $font, $pt, $fmt).Width
+    foreach ($ch in $txt.ToCharArray()) {
+        if ($ch -eq ' ') { $x += $nW * 0.9 + $sp; continue }
+        $g.DrawString([string]$ch, $font, $brush, $x, $y, $fmt)
+        $x += $g.MeasureString([string]$ch, $font, $pt, $fmt).Width + $sp
+    }
+    return [single]$x
 }
-function Format-Rate([double]$bps) { return ((Format-Bytes $bps) + '/s') }
-
-
-# ---------- Brand: F logo + wordmark ----------
-# ---------- Brand: F logo + wordmark ----------
-function Get-RoundPath([single]$x, [single]$y, [single]$w, [single]$h, [single]$r) {
-    $p = New-Object Drawing.Drawing2D.GraphicsPath; $d = $r * 2
-    $p.AddArc($x, $y, $d, $d, 180, 90); $p.AddArc($x + $w - $d, $y, $d, $d, 270, 90)
-    $p.AddArc($x + $w - $d, $y + $h - $d, $d, $d, 0, 90); $p.AddArc($x, $y + $h - $d, $d, $d, 90, 90)
-    $p.CloseFigure(); return $p
-}
-function Draw-FrenzyLogo($g, [single]$x, [single]$y, [single]$s) {
-    $path = Get-RoundPath $x $y $s $s ($s * 0.24)
-    $rect = New-Object Drawing.RectangleF($x, $y, $s, $s)
-    $br = New-Object Drawing.Drawing2D.LinearGradientBrush($rect, [Drawing.Color]::FromArgb(255, 178, 36), [Drawing.Color]::FromArgb(255, 66, 0), 55.0)
-    $g.FillPath($br, $path)
-    $hl = New-Object Drawing.Drawing2D.LinearGradientBrush($rect, [Drawing.Color]::FromArgb(80, 255, 255, 255), [Drawing.Color]::FromArgb(0, 255, 255, 255), 90.0)
-    $g.FillPath($hl, $path)
-    $pts = @(@(0.28, 0.20), @(0.74, 0.20), @(0.74, 0.33), @(0.42, 0.33), @(0.42, 0.44), @(0.66, 0.44), @(0.66, 0.56), @(0.42, 0.56), @(0.42, 0.80), @(0.28, 0.80))
-    $poly = @(foreach ($q in $pts) { New-Object Drawing.PointF(($x + $s * ($q[0] + 0.10 * (0.5 - $q[1]))), ($y + $s * $q[1])) })
-    $g.FillPolygon([Drawing.Brushes]::White, [Drawing.PointF[]]$poly)
-    $br.Dispose(); $hl.Dispose(); $path.Dispose()
-}
-function New-LogoBox([int]$Size, $BgColor) {
-    $p = New-Object Windows.Forms.Panel; $p.Size = New-Object Drawing.Size($Size, $Size); $p.BackColor = $BgColor
-    $p.Add_Paint({ param($sn, $e) $e.Graphics.SmoothingMode = 'AntiAlias'; Draw-FrenzyLogo $e.Graphics 1 1 ($sn.Width - 2) })
+function New-Wordmark([int]$X, [int]$Y, [single]$Px, [single]$Sp, $BgColor) {
+    $font = [Fz.Theme]::T($Px, $true)
+    $tmp = New-Object Drawing.Bitmap(1, 1); $mg = [Drawing.Graphics]::FromImage($tmp)
+    $w1 = Measure-Spaced $mg 'FRENZY' $font $Sp; $w2 = Measure-Spaced $mg 'TWEAKS' $font $Sp; $gap = $Px * 0.45
+    $mg.Dispose(); $tmp.Dispose()
+    $p = New-Object Windows.Forms.Panel; $p.Location = New-Object Drawing.Point($X, $Y)
+    $p.Size = New-Object Drawing.Size(([int]($w1 + $gap + $w2 + 6)), ([int]($Px * 1.35))); $p.BackColor = $BgColor
+    $p.Tag = @{ Font = $font; Gap = $gap; Sp = $Sp }
+    $p.Add_Paint({ param($sn, $e)
+            $g = $e.Graphics; $g.TextRenderingHint = 'AntiAliasGridFit'; $t = $sn.Tag
+            $b1 = New-Object Drawing.SolidBrush([Fz.Theme]::Text); $b2 = New-Object Drawing.SolidBrush([Fz.Theme]::AccentHi)
+            $nx = Draw-Spaced $g 'FRENZY' $t.Font $b1 0 0 $t.Sp
+            [void](Draw-Spaced $g 'TWEAKS' $t.Font $b2 ($nx + $t.Gap) 0 $t.Sp)
+            $b1.Dispose(); $b2.Dispose() })
     return $p
 }
-# ---------- Startup loader (fallback when the GitHub bootstrap has no splash) ----------
-# Decorative startup screen: it does not claim that a network connection succeeded.
-# Keep it visible for at least 10 seconds, and close only the splash after the main window is ready.
-if (-not $global:FrenzySplashForm) {
-    try {
-        $global:FrenzySplashReady = $false
-        $global:FrenzySplashStarted = [DateTime]::UtcNow
-        $global:FrenzySplashForm = New-Object Windows.Forms.Form
-        $sf = $global:FrenzySplashForm
-        $sf.Text = 'FRENZY TWEAKS'
-        $sf.FormBorderStyle = 'None'; $sf.StartPosition = 'CenterScreen'
-        $sf.ClientSize = New-Object Drawing.Size(470, 270)
-        $sf.BackColor = [Drawing.Color]::FromArgb(8, 11, 21)
-        $sf.ShowInTaskbar = $false; $sf.TopMost = $true; $sf.Opacity = 0
-        $sf.Add_Shown({ $this.Opacity = 1 })
-
-        $logo = New-LogoBox 62 $sf.BackColor
-        $logo.Location = New-Object Drawing.Point(204, 26)
-        $sf.Controls.Add($logo)
-        $brand = New-Object Windows.Forms.Label
-        $brand.Text = 'F R E N Z Y'; $brand.ForeColor = [Drawing.Color]::FromArgb(245, 247, 255)
-        $brand.Font = New-Object Drawing.Font('Segoe UI', 21, [Drawing.FontStyle]::Bold)
-        $brand.TextAlign = 'MiddleCenter'; $brand.Location = New-Object Drawing.Point(30, 99)
-        $brand.Size = New-Object Drawing.Size(410, 36); $sf.Controls.Add($brand)
-        $sub = New-Object Windows.Forms.Label
-        $sub.Text = 'G A M I N G   P E R F O R M A N C E   S U I T E'
-        $sub.ForeColor = [Drawing.Color]::FromArgb(138, 152, 184)
-        $sub.Font = New-Object Drawing.Font('Segoe UI', 8, [Drawing.FontStyle]::Regular)
-        $sub.TextAlign = 'MiddleCenter'; $sub.Location = New-Object Drawing.Point(30, 136)
-        $sub.Size = New-Object Drawing.Size(410, 22); $sf.Controls.Add($sub)
-        $status = New-Object Windows.Forms.Label
-        $status.Text = 'PREPARING FRENZY TWEAKS...'; $status.ForeColor = [Drawing.Color]::FromArgb(255, 126, 35)
-        $status.Font = New-Object Drawing.Font('Consolas', 9, [Drawing.FontStyle]::Bold)
-        $status.TextAlign = 'MiddleCenter'; $status.Location = New-Object Drawing.Point(30, 183)
-        $status.Size = New-Object Drawing.Size(410, 22); $sf.Controls.Add($status)
-        $track = New-Object Windows.Forms.Panel
-        $track.Location = New-Object Drawing.Point(55, 216); $track.Size = New-Object Drawing.Size(360, 5)
-        $track.BackColor = [Drawing.Color]::FromArgb(36, 45, 65); $sf.Controls.Add($track)
-        $fill = New-Object Windows.Forms.Panel
-        $fill.Location = New-Object Drawing.Point(0, 0); $fill.Size = New-Object Drawing.Size(0, 5)
-        $fill.BackColor = [Drawing.Color]::FromArgb(255, 106, 0); $track.Controls.Add($fill)
-        $foot = New-Object Windows.Forms.Label
-        $foot.Text = 'INITIALIZING COMPONENTS'; $foot.ForeColor = [Drawing.Color]::FromArgb(92, 108, 139)
-        $foot.Font = New-Object Drawing.Font('Consolas', 7.5)
-        $foot.TextAlign = 'MiddleCenter'; $foot.Location = New-Object Drawing.Point(30, 230)
-        $foot.Size = New-Object Drawing.Size(410, 18); $sf.Controls.Add($foot)
-
-        # Update the splash synchronously instead of using a PowerShell Timer callback.
-        # Timer callbacks can fire after an iex pipeline ends, causing PipelineStoppedException.
-        $sf.Show(); $sf.Refresh()
-
-        # Complete the splash BEFORE building/showing the main application.
-        # Pump WinForms events so the animation and progress text keep updating.
-        while ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed -and
-               (([DateTime]::UtcNow - $global:FrenzySplashStarted).TotalSeconds -lt 10)) {
-            $elapsed = ([DateTime]::UtcNow - $global:FrenzySplashStarted).TotalSeconds
-            $pct = [Math]::Min(100, [int](($elapsed / 10.0) * 100))
-            $fill.Width = [Math]::Max(2, [int](360 * $pct / 100.0))
-            if ($elapsed -lt 2) { $status.Text = 'PREPARING FRENZY TWEAKS...'; $foot.Text = 'INITIALIZING COMPONENTS' }
-            elseif ($elapsed -lt 4) { $status.Text = 'CONNECTING TO GITHUB...'; $foot.Text = 'CHECKING STARTUP SOURCE' }
-            elseif ($elapsed -lt 6) { $status.Text = 'AUTHENTICATING SESSION...'; $foot.Text = 'VERIFYING LOCAL STARTUP' }
-            elseif ($elapsed -lt 8) { $status.Text = 'LOADING INTERFACE...'; $foot.Text = 'PREPARING PERFORMANCE TOOLS' }
-            else { $status.Text = 'LAUNCHING APP...'; $foot.Text = 'STARTUP COMPLETE' }
-            [Windows.Forms.Application]::DoEvents()
-            Start-Sleep -Milliseconds 25
-        }
-        if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop() }
-        try {
-            $sf.TopMost = $false
-            $sf.Hide()
-            $sf.Dispose()
-        } catch {}
-        $global:FrenzySplashForm = $null
-    } catch {
-        # A splash-screen failure must never prevent the main app from opening.
-        $global:FrenzySplashForm = $null
-        if ($global:FrenzySplashTimer) { try { $global:FrenzySplashTimer.Stop() } catch {} }
+function New-Lbl([string]$Text, [int]$X, [int]$Y, [int]$W, [int]$H, $Font = $null, $Color = $null) {
+    if (-not $Font) { $Font = $script:Fnt.Norm }; if (-not $Color) { $Color = $script:Clr.Text }
+    $l = New-Object Windows.Forms.Label; $l.Text = $Text; $l.UseMnemonic = $false; $l.AutoSize = $false
+    $l.Location = New-Object Drawing.Point($X, $Y); $l.Size = New-Object Drawing.Size($W, $H)
+    $l.Font = $Font; $l.ForeColor = $Color; $l.BackColor = [Drawing.Color]::Transparent
+    $l.UseCompatibleTextRendering = $true
+    return $l
+}
+function New-Btn([string]$Text, [int]$W = 150, [int]$H = 36, [bool]$Primary = $false, $Accent = $null, [string]$Icon = '') {
+    $b = New-Object Fz.FzButton; $b.Text = $Text; $b.Size = New-Object Drawing.Size($W, $H); $b.Primary = $Primary
+    $b.Accent = $(if ($Accent) { $Accent } else { $script:Acc }); if ($Icon) { $b.Icon = $Icon }
+    $b.Font = $script:Fnt.SmallB; $b.UseMnemonic = $false
+    return $b
+}
+function New-Card([int]$W, [int]$H, [string]$Size = 'full', $Accent = $null) {
+    $p = New-Object Fz.FzCard; $p.Size = New-Object Drawing.Size($W, $H); $p.Name = $Size
+    $p.Accent = $(if ($Accent) { $Accent } else { $script:Acc }); $p.Margin = New-Object Windows.Forms.Padding(0, 0, 12, 12)
+    return $p
+}
+function New-Section([string]$Text, $Accent = $null) {
+    $a = $(if ($Accent) { $Accent } else { $script:Acc })
+    $p = New-Object Windows.Forms.Panel; $p.Name = 'full'; $p.Height = 32; $p.Width = 800; $p.BackColor = $script:Clr.Bg
+    $p.Margin = New-Object Windows.Forms.Padding(0, 10, 12, 2)
+    $p.Controls.Add((New-Lbl "$BAR $Text" 0 4 800 24 $script:Fnt.Mid [Fz.Theme]::AccentHi)); $p.Controls[0].BackColor = $script:Clr.Bg
+    return $p
+}
+function Fit-Flow($f) {
+    $w = $f.ClientSize.Width - $f.Padding.Horizontal - [Windows.Forms.SystemInformation]::VerticalScrollBarWidth - 2
+    if ($w -lt 300) { return }
+    $gap = 12; $f.SuspendLayout()
+    foreach ($c in $f.Controls) {
+        $nw = 0
+        if ($c.Name -eq 'full') { $nw = $w - $gap }
+        elseif ($c.Name -eq 'half') { $nw = [int](($w - $gap * 2) / 2) }
+        elseif ($c.Name -eq 'third') { $nw = [int](($w - $gap * 3) / 3) }
+        elseif ($c.Name -eq 'quarter') { $nw = [int](($w - $gap * 4) / 4) }
+        if ($nw -gt 0 -and $c.Width -ne $nw) { $c.Width = $nw }
     }
+    $f.ResumeLayout()
+}
+function New-Tile([string]$Title, $Accent = $null) {
+    $a = $(if ($Accent) { $Accent } else { $script:Acc })
+    $p = New-Card 240 138 'quarter' $a; $p.Stripe = $true
+    $v = New-Lbl '--' 18 32 400 42 $script:Fnt.Huge; $av = New-Lbl '' 18 76 400 16 $script:Fnt.Tiny $script:Clr.Dim
+    $s = New-Lbl '' 18 94 400 16 $script:Fnt.Small $script:Clr.Dim; $s.AutoEllipsis = $true
+    $t = New-Lbl $Title 18 10 300 18 $script:Fnt.Tiny $a
+    $bar = New-Object Fz.FzProgress; $bar.Accent = $a; $bar.Height = 6; $bar.Location = New-Object Drawing.Point(18, 118); $bar.Width = 200
+    $p.Controls.AddRange(@($t, $v, $av, $s, $bar))
+    $p.Add_Resize({ $w = $this.Width; foreach ($c in $this.Controls) { if ($c -is [Windows.Forms.Label] -and $c.Left -eq 18) { $c.Width = $w - 36 } elseif ($c -is [Fz.FzProgress]) { $c.Width = $w - 36 } } })
+    return @{ Panel = $p; Val = $v; Avg = $av; Sub = $s; Bar = $bar }
+}
+function Set-Tile($Tile, [string]$Val, $Pct, [string]$Avg, [string]$Sub) {
+    if (-not $Tile) { return }
+    $Tile.Val.Text = $Val; $Tile.Avg.Text = $Avg; $Tile.Sub.Text = $Sub
+    if ($null -ne $Pct) { $Tile.Bar.Value = [int][math]::Max(0, [math]::Min(100, $Pct)) }
+}
+
+$script:BannerSubtitles = @{
+    'GENERAL'  = 'SYSTEM PERFORMANCE / WINDOWS OPTIMIZATION'
+    'INPUT'    = 'LOWER LATENCY / FASTER REACTION / BETTER CONTROL'
+    'NETWORK'  = 'LOWER LATENCY / STABLE CONNECTION'
+    'DEBLOAT'  = 'REMOVE CLUTTER / CLEANER WINDOWS'
+    'SERVICES' = 'BACKGROUND SERVICES / SYSTEM EFFICIENCY'
+    'GPU'      = 'GPU PERFORMANCE / GRAPHICS OPTIMIZATION'
+    'AMD'      = 'RADEON PERFORMANCE / GRAPHICS SETTINGS'
+    'INTEL'    = 'INTEGRATED GRAPHICS / SYSTEM OPTIMIZATION'
+    'CLEANUP'  = 'REMOVE JUNK / FREE STORAGE'
+    'GAMES'    = 'ADVANCED NVIDIA PROFILE MANAGEMENT'
+    'SETTINGS' = 'APP PREFERENCES AND ADVANCED OPTIONS'
+    'RESTORE'  = 'RECOVERY, SAVED STATE AND AUDIT HISTORY'
+}
+
+$script:BannerSubtitles = @{
+    'GENERAL'  = 'SYSTEM PERFORMANCE   /   WINDOWS OPTIMIZATION'
+    'INPUT'    = 'LOWER LATENCY   /   FASTER REACTION   /   BETTER CONTROL'
+    'NETWORK'  = 'LOWER PING   /   STABLE CONNECTION   /   ZERO PACKET LOSS'
+    'DEBLOAT'  = 'REMOVE CLUTTER   /   BACKGROUND PROCESSES   /   CLEAN WINDOWS'
+    'SERVICES' = 'BACKGROUND SERVICES   /   LATENCY REDUCTION   /   SYSTEM EFFICIENCY'
+    'GPU'      = 'GPU PERFORMANCE   /   GRAPHICS TUNING   /   NVIDIA LOW LATENCY'
+    'AMD'      = 'RADEON PERFORMANCE   /   GRAPHICS DRIVER OPTIMIZATION'
+    'INTEL'    = 'INTEGRATED GRAPHICS   /   DYNAMIC POWER TUNING'
+    'CLEANUP'  = 'REMOVE JUNK FILES   /   TEMP CACHES   /   FREE STORAGE'
+    'GAMES'    = 'ADVANCED DRIVER PROFILES   /   ULTRA-LOW LATENCY   /   FORTNITE'
+    'SETTINGS' = 'APP PREFERENCES   /   PROTECTION GUARD   /   ROLLBACK CONTROLS'
+    'RESTORE'  = 'RECOVERY, SAVED STATE AND AUDIT HISTORY'
+}
+
+function New-PageShell([string]$Key, [string]$Title, [string]$Sub, [int]$HeadH = 104) {
+    $acc = $script:PageClr[$Key]; $script:Acc = $acc
+    $p = New-Object Windows.Forms.Panel; $p.Dock = 'Fill'; $p.BackColor = $script:Clr.Bg; $p.Visible = $false
+    $hd = New-Object Fz.FzHeader; $hd.Dock = 'Top'; $hd.Height = $HeadH; $hd.Accent = $acc
+    $hd.Title = $Title
+    $customSub = if ($script:BannerSubtitles.ContainsKey($Key)) { $script:BannerSubtitles[$Key] } else { $Sub }
+    $hd.Subtitle = $customSub
+    $hd.Breadcrumb = "FRENZY TWEAKS   /   " + $Title.ToUpper()
+
+    $flow = New-Object Fz.FzFlow; $flow.Dock = 'Fill'; $flow.FlowDirection = 'LeftToRight'; $flow.WrapContents = $true
+    $flow.AutoScroll = $true; $flow.BackColor = $script:Clr.Bg; $flow.Padding = New-Object Windows.Forms.Padding(24, 12, 16, 14)
+    $flow.Add_Resize({ Fit-Flow $this })
+    $p.Controls.Add($flow); $p.Controls.Add($hd); $flow.BringToFront()
+    $script:Pages[$Key] = @{ Panel = $p; Flow = $flow; Header = $hd; Footer = $null; FooterLbl = $null; Accent = $acc }
+    return $p
+}
+
+function Add-GroupHeader($flow, [string]$Key, [string]$Group) {
+    $a = [Fz.Theme]::AccentHi
+    $p = New-Object Windows.Forms.Panel; $p.Name = 'full'; $p.Height = 34; $p.Width = 800; $p.BackColor = $script:Clr.Bg
+    $p.Margin = New-Object Windows.Forms.Padding(0, 10, 12, 2)
+    $l = New-Lbl "$BAR $Group" 0 6 600 24 $script:Fnt.Mid $a; $l.BackColor = $script:Clr.Bg
+    $c = New-Lbl '' 0 8 200 18 $script:Fnt.Tiny $script:Clr.Dim; $c.TextAlign = 'MiddleRight'; $c.BackColor = $script:Clr.Bg
+    $p.Controls.Add($l); $p.Controls.Add($c)
+    $p.Add_Resize({ $this.Controls[1].Left = $this.Width - 210 })
+    $p.Width = 801
+    $flow.Controls.Add($p)
+    [void]$script:GroupHdr.Add([pscustomobject]@{ Page = $Key; Group = $Group; Lbl = $l; Cnt = $c; Panel = $p })
+}
+
+function Show-TweakInfo($t) {
+    $u = if ($t.Reversible) { 'Yes - the original value is backed up and restored on undo.' } else { 'No automatic undo (one-time action).' }
+    [void][Fz.Msg]::Show("$($t.Desc)`n`nRisk: $($t.Risk)`nUndo: $u", $t.Name, 'OK', 'Information')
+}
+
+function Add-TweakRow($flow, $t, [string]$Key, [string]$Group) {
+    $acc = [Fz.Theme]::Accent
+    $row = New-Object Fz.FzCard; $row.Name = 'half'; $row.Height = 104; $row.Width = 480; $row.Accent = $acc
+    $row.Margin = New-Object Windows.Forms.Padding(0, 0, 12, 12)
+    $oneShot = -not $t.Reversible
+    $nameL = New-Lbl $t.Name 18 12 360 22 $script:Fnt.Row $script:Clr.Text; $nameL.AutoEllipsis = $true
+    $nameW = [Windows.Forms.TextRenderer]::MeasureText($t.Name, $script:Fnt.Row).Width + 2
+    $starL = New-Lbl $STAR 0 13 18 20 $script:Fnt.Row $script:Clr.Warn; $starL.Visible = [bool]$t.Default
+    $revL = New-Lbl $REV 0 13 18 20 $script:Fnt.Row $script:Clr.Good; $revL.Visible = [bool]$t.Reversible
+    $descL = New-Lbl $t.Desc 18 36 430 32 $script:Fnt.Small $script:Clr.Dim; $descL.AutoEllipsis = $true
+    $riskCol = switch ($t.Risk) { 'Safe' { $script:Clr.Good } 'Moderate' { $script:Clr.Warn } default { $script:Clr.Bad } }
+    $pill = New-Object Fz.FzPill; $pill.Text = $t.Risk.ToUpper(); $pill.Tint = $riskCol; $pill.Location = New-Object Drawing.Point(18, 74); $pill.Fit()
+    $nrL = New-Lbl $(if ($oneShot) { 'ONE-TIME ACTION' } else { '' }) ($pill.Right + 10) 76 150 16 $script:Fnt.Tiny $script:Clr.Bad
+    $stat = New-Lbl '' 0 76 150 16 $script:Fnt.Tiny $script:Clr.Dim; $stat.TextAlign = 'MiddleRight'
+    $info = New-Object Fz.FzButton; $info.Text = 'i'; $info.Size = New-Object Drawing.Size(24, 24); $info.Accent = $acc; $info.Font = $script:Fnt.SmallB; $info.Radius = 12; $info.Top = 11
+    $info.Tag = $t; $info.Add_Click({ Show-TweakInfo $this.Tag })
+    $chk = $null; $ctl = $null
+    $rec = [pscustomobject]@{ Page = $Key; Group = $Group; T = $t; Chk = $null; Status = $stat; OneShot = $oneShot; Row = $row; Active = $false; Shown = $true }
+    if ($oneShot) {
+        $ctl = New-Btn 'RUN' 70 28 $false $acc 'bolt'; $ctl.Top = 10; $ctl.Tag = $t; $ctl.Add_Click({ Invoke-Run @($this.Tag) @() })
+    } else {
+        $chk = New-Object Fz.FzToggle; $chk.OnColor = $acc; $chk.Top = 12; $ctl = $chk; $rec.Chk = $chk; $chk.Tag = $rec
+        $chk.Add_CheckedChanged({ $r = $this.Tag; $r.Row.Lit = $this.Checked; if (-not $script:Busy -and -not $script:Loading) { Update-Footer $r.Page } })
+    }
+    $row.Tag = @{ Name = $nameL; NameW = $nameW; Star = $starL; Rev = $revL; Desc = $descL; Info = $info; Ctl = $ctl; Stat = $stat }
+    $row.Controls.AddRange(@($nameL, $starL, $revL, $descL, $pill, $nrL, $stat, $info, $ctl))
+    $row.Add_Resize({
+            $s = $this.Tag; $w = $this.Width
+            $s.Ctl.Left = $w - $s.Ctl.Width - 16
+            $s.Info.Left = $s.Ctl.Left - 32
+            $avail = $s.Info.Left - 22
+            $s.Name.Width = [math]::Max(60, [math]::Min($s.NameW, ($avail - 44)))
+            $s.Star.Left = $s.Name.Left + $s.Name.Width + 4
+            $s.Rev.Left = $(if ($s.Star.Visible) { $s.Star.Right + 2 } else { $s.Name.Left + $s.Name.Width + 4 })
+            $s.Desc.Width = $w - 36
+            $s.Stat.Left = $w - 166
+        })
+    $row.Width = 481
+    $flow.Controls.Add($row)
+    [void]$script:Rows.Add($rec)
+    return $rec
 }
 
 function Measure-Spaced($g, [string]$txt, $font, [single]$sp) {
@@ -1795,6 +2368,7 @@ function New-Lbl([string]$Text, [int]$X, [int]$Y, [int]$W, [int]$H, $Font = $nul
     $l = New-Object Windows.Forms.Label; $l.Text = $Text; $l.UseMnemonic = $false; $l.AutoSize = $false
     $l.Location = New-Object Drawing.Point($X, $Y); $l.Size = New-Object Drawing.Size($W, $H)
     $l.Font = $Font; $l.ForeColor = $Color; $l.BackColor = [Drawing.Color]::Transparent
+    $l.UseCompatibleTextRendering = $true
     return $l
 }
 function New-Btn([string]$Text, [int]$W = 150, [int]$H = 36, [bool]$Primary = $false, $Accent = $null, [string]$Icon = '') {
@@ -1845,15 +2419,32 @@ function Set-Tile($Tile, [string]$Val, $Pct, [string]$Avg, [string]$Sub) {
     $Tile.Val.Text = $Val; $Tile.Avg.Text = $Avg; $Tile.Sub.Text = $Sub
     if ($null -ne $Pct) { $Tile.Bar.Value = [int][math]::Max(0, [math]::Min(100, $Pct)) }
 }
-function New-PageShell([string]$Key, [string]$Title, [string]$Sub, [int]$HeadH = 116) {
+$script:BannerSubtitles = @{
+    'GENERAL'  = 'SYSTEM PERFORMANCE   /   WINDOWS OPTIMIZATION'
+    'INPUT'    = 'LOWER LATENCY   /   FASTER REACTION   /   BETTER CONTROL'
+    'NETWORK'  = 'LOWER PING   /   STABLE CONNECTION   /   ZERO PACKET LOSS'
+    'DEBLOAT'  = 'REMOVE CLUTTER   /   BACKGROUND PROCESSES   /   CLEAN WINDOWS'
+    'SERVICES' = 'BACKGROUND SERVICES   /   LATENCY REDUCTION   /   SYSTEM EFFICIENCY'
+    'GPU'      = 'GPU PERFORMANCE   /   GRAPHICS TUNING   /   NVIDIA LOW LATENCY'
+    'AMD'      = 'RADEON PERFORMANCE   /   GRAPHICS DRIVER OPTIMIZATION'
+    'INTEL'    = 'INTEGRATED GRAPHICS   /   DYNAMIC POWER TUNING'
+    'CLEANUP'  = 'REMOVE JUNK FILES   /   TEMP CACHES   /   FREE STORAGE'
+    'GAMES'    = 'ADVANCED DRIVER PROFILES   /   ULTRA-LOW LATENCY   /   FORTNITE'
+    'SETTINGS' = 'APP PREFERENCES   /   PROTECTION GUARD   /   ROLLBACK CONTROLS'
+    'RESTORE'  = 'RECOVERY, SAVED STATE AND AUDIT HISTORY'
+}
+
+function New-PageShell([string]$Key, [string]$Title, [string]$Sub, [int]$HeadH = 104) {
     $acc = $script:PageClr[$Key]; $script:Acc = $acc
     $p = New-Object Windows.Forms.Panel; $p.Dock = 'Fill'; $p.BackColor = $script:Clr.Bg; $p.Visible = $false
     $hd = New-Object Fz.FzHeader; $hd.Dock = 'Top'; $hd.Height = $HeadH; $hd.Accent = $acc
-    $hd.Controls.Add((New-Lbl ('FRENZY TWEAKS  >  ' + $Title) 30 12 700 18 $script:Fnt.Tiny $script:Clr.Dim))
-    $hd.Controls.Add((New-Lbl $Title 28 30 700 46 $script:Fnt.Title $script:Clr.Text))
-    $sl = New-Lbl $Sub 31 78 900 22 $script:Fnt.Norm $script:Clr.Dim; $hd.Controls.Add($sl)
+    $hd.Title = $Title
+    $customSub = if ($script:BannerSubtitles.ContainsKey($Key)) { $script:BannerSubtitles[$Key] } else { $Sub }
+    $hd.Subtitle = $customSub
+    $hd.Breadcrumb = "FRENZY TWEAKS   /   " + $Title.ToUpper()
+
     $flow = New-Object Fz.FzFlow; $flow.Dock = 'Fill'; $flow.FlowDirection = 'LeftToRight'; $flow.WrapContents = $true
-    $flow.AutoScroll = $true; $flow.BackColor = $script:Clr.Bg; $flow.Padding = New-Object Windows.Forms.Padding(28, 10, 16, 14)
+    $flow.AutoScroll = $true; $flow.BackColor = $script:Clr.Bg; $flow.Padding = New-Object Windows.Forms.Padding(24, 12, 16, 14)
     $flow.Add_Resize({ Fit-Flow $this })
     $p.Controls.Add($flow); $p.Controls.Add($hd); $flow.BringToFront()
     $script:Pages[$Key] = @{ Panel = $p; Flow = $flow; Header = $hd; Footer = $null; FooterLbl = $null; Accent = $acc }
@@ -1980,13 +2571,13 @@ function New-SearchBox([string]$Key) {
     $c.Controls.Add($tb); return $c
 }
 function Build-TweakPage([string]$Key, [string]$Title, [string]$Sub, [scriptblock]$Pre = $null, [scriptblock]$Post = $null) {
-    $p = New-PageShell $Key $Title $Sub 166; $pg = $script:Pages[$Key]; $flow = $pg.Flow; $acc = $pg.Accent
-    $sb = New-SearchBox $Key; $sb.Location = New-Object Drawing.Point(30, 114); $pg.Header.Controls.Add($sb)
-    $pg.CountLbl = New-Lbl '' 384 124 120 20 $script:Fnt.Mono $script:Clr.Dim; $pg.Header.Controls.Add($pg.CountLbl)
-    $btnPanel = New-Object Windows.Forms.FlowLayoutPanel; $btnPanel.Dock = 'Right'; $btnPanel.Width = 500; $btnPanel.FlowDirection = 'RightToLeft'
-    $btnPanel.Padding = New-Object Windows.Forms.Padding(0, 116, 24, 0); $btnPanel.BackColor = [Drawing.Color]::Transparent
-    $bAll = New-Btn 'APPLY RECOMMENDED' 180 38 $true $acc 'bolt'; $bAll.Tag = $Key; $bAll.Add_Click({ Select-Recommended $this.Tag; Invoke-PagePending $this.Tag })
-    $bSel = New-Btn 'SELECT RECOMMENDED' 250 38 $false $acc 'check'; $bSel.Tag = $Key; $bSel.Add_Click({ Select-Recommended $this.Tag }); $pg.RecBtn = $bSel
+    $p = New-PageShell $Key $Title $Sub 164; $pg = $script:Pages[$Key]; $flow = $pg.Flow; $acc = $pg.Accent
+    $sb = New-SearchBox $Key; $sb.Location = New-Object Drawing.Point(26, 112); $pg.Header.Controls.Add($sb)
+    $pg.CountLbl = New-Lbl '' 376 120 120 20 $script:Fnt.Mono $script:Clr.Dim; $pg.Header.Controls.Add($pg.CountLbl)
+    $btnPanel = New-Object Windows.Forms.FlowLayoutPanel; $btnPanel.Dock = 'Right'; $btnPanel.Width = 460; $btnPanel.FlowDirection = 'RightToLeft'
+    $btnPanel.Padding = New-Object Windows.Forms.Padding(0, 110, 24, 0); $btnPanel.BackColor = [Drawing.Color]::Transparent
+    $bAll = New-Btn 'APPLY RECOMMENDED' 175 36 $true $acc 'bolt'; $bAll.Tag = $Key; $bAll.Add_Click({ Select-Recommended $this.Tag; Invoke-PagePending $this.Tag })
+    $bSel = New-Btn 'SELECT RECOMMENDED' 235 36 $false $acc 'check'; $bSel.Tag = $Key; $bSel.Add_Click({ Select-Recommended $this.Tag }); $pg.RecBtn = $bSel
     $btnPanel.Controls.Add($bAll); $btnPanel.Controls.Add($bSel); $pg.Header.Controls.Add($btnPanel)
     $foot = New-Object Windows.Forms.Panel; $foot.Dock = 'Bottom'; $foot.Height = 58; $foot.BackColor = $script:Clr.Side
     $fl = New-Lbl '' 30 19 800 22 $script:Fnt.Mono $script:Clr.Dim
@@ -2132,7 +2723,8 @@ function Test-TweakActive($t) {
         'Reg' {
             foreach ($i in $t.Arg) {
                 try { $cur = (Get-ItemProperty -Path $i.P -Name $i.N -ErrorAction Stop).($i.N) } catch { return $false }
-                if ("$cur" -ne "$($i.V)") { return $false }
+                $itemType = if ($i.T) { $i.T } else { 'DWord' }
+                if (-not (Test-RegMatch $cur $i.V $itemType)) { return $false }
             }
             return $true
         }
@@ -2159,8 +2751,7 @@ function Test-TweakActive($t) {
 
 # ---------- Where does each tweak live in the UI ----------
 $script:GroupOrder = @{
-    GENERAL = @('PRIVACY', 'NOTIFICATIONS & SURFACES', 'DIAGNOSTICS & BACKGROUND', 'OPTIONAL WINDOWS FEATURES')
-    DEBLOAT = @('CLEANUP & SHELL')
+    GENERAL = @('CLEANUP & SHELL', 'PRIVACY', 'NOTIFICATIONS & SURFACES', 'DIAGNOSTICS & BACKGROUND', 'OPTIONAL WINDOWS FEATURES')
     INPUT   = @('PRIORITY & SCHEDULING', 'INPUT HARDWARE', 'BACKGROUND SERVICES', 'GAME SURFACES & OVERLAYS', 'COMPANION APPS')
     GPU     = @('POWER & PCIE')
     NETWORK = @('NETWORK TWEAKS', 'ADVANCED (EXPERT)')
@@ -2178,7 +2769,7 @@ function Get-TweakPlace($t) {
     if ($script:InputMap.ContainsKey($t.Name)) { return @('INPUT', $script:InputMap[$t.Name]) }
     if ($t.Name -eq 'Disable PowerShell 7 Telemetry') { return @('GENERAL', 'DIAGNOSTICS & BACKGROUND') }
     switch -Wildcard ($t.Cat) {
-        '1.*' { return @('DEBLOAT', 'CLEANUP & SHELL') }
+        '1.*' { return @('GENERAL', 'CLEANUP & SHELL') }
         '2.*' { return @('GENERAL', 'PRIVACY') }
         '3.*' { return @('GENERAL', 'NOTIFICATIONS & SURFACES') }
         '4.*' { return @('GENERAL', 'DIAGNOSTICS & BACKGROUND') }
@@ -2231,7 +2822,6 @@ function Invoke-Run($ApplyList, $UndoList, [bool]$Confirm = $true) {
     }
     if (-not $dry -and $ApplyList.Count -gt 0 -and $script:chkRP.Checked -and -not $script:RPDone) { New-RestorePoint }
     $script:Busy = $true; $script:RebootNeeded = $false; $script:Form.UseWaitCursor = $true
-    if ($script:ActivityNotice) { $script:ActivityNotice.Text = 'WORKING  |  Applying selected changes...' }
     $script:Progress.Maximum = [Math]::Max(1, $total); $script:Progress.Value = 0; $i = 0; $ok = 0; $fail = 0; $skipped = 0
     try {
         foreach ($pair in (@($ApplyList | ForEach-Object { @{ T = $_; M = 'Apply' } }) + @($UndoList | ForEach-Object { @{ T = $_; M = 'Undo' } }))) {
@@ -2246,11 +2836,6 @@ function Invoke-Run($ApplyList, $UndoList, [bool]$Confirm = $true) {
         }
     } finally { $script:Busy = $false; $script:Form.UseWaitCursor = $false }
     Log "OPTIMIZATION SUMMARY - Applied/Restored: $ok  Failed: $fail  Skipped: $skipped"
-    if ($script:ActivityNotice) {
-        $script:ActivityNotice.Text = $(if ($fail -gt 0) { "COMPLETED WITH ERRORS  |  $ok successful, $fail failed" } elseif ($dry) { "PREVIEW COMPLETE  |  $skipped changes reviewed" } else { "SUCCESS  |  $ok changes completed" })
-        $script:ActivityNotice.ForeColor = $(if ($fail -gt 0) { [Drawing.Color]::FromArgb(255,193,90) } else { [Drawing.Color]::FromArgb(74,222,128) })
-    }
-    if (-not $dry -and $script:RebootNeeded) { Set-FrenzyRestartPending }
     Refresh-AllRows; Update-Home
     if (-not $dry) {
         $m = "FRENZY TWEAKS - OPTIMIZATION SUMMARY`n`nSuccessful: $ok`nFailed: $fail`nSkipped: $skipped`n`nRestart: may be required for some changes."
@@ -2631,19 +3216,6 @@ function Show-AppsDialog {
 # ---------- Services ----------
 # ---------- Services ----------
 $script:SvcGroups = @(
-    @{ G = 'Telemetry / optional background'; S = @(
-        @{ N = 'DiagTrack'; D = 'Connected User Experiences and Telemetry. Disabling reduces diagnostic collection, not guaranteed FPS.'; R = $true },
-        @{ N = 'dmwappushservice'; D = 'WAP push message routing; optional on many gaming PCs.'; R = $true },
-        @{ N = 'MapsBroker'; D = 'Downloaded Maps Manager; disable only if you never use offline maps.'; R = $false },
-        @{ N = 'stisvc'; D = 'Windows Image Acquisition; needed for some scanners/cameras.'; R = $false }) }
-    @{ G = 'Optional services (test before disabling)'; S = @(
-        @{ N = 'WSearch'; D = 'Windows Search indexing; can make searches slower if disabled.'; R = $false },
-        @{ N = 'SysMain'; D = 'Prefetch/SysMain; effect varies by drive and workload; leave enabled unless testing shows a benefit.'; R = $false }) }
-    @{ G = 'Xbox integrations (keep if using Xbox / Game Pass features)'; S = @(
-        @{ N = 'XblAuthManager'; D = 'Xbox Live authentication; may affect Xbox-linked logins.'; R = $false },
-        @{ N = 'XblGameSave'; D = 'Xbox cloud saves; disabling can affect saves.'; R = $false },
-        @{ N = 'XboxGipSvc'; D = 'Xbox accessory support.'; R = $false },
-        @{ N = 'XboxNetApiSvc'; D = 'Xbox networking / multiplayer integration.'; R = $false }) }
     @{ G = 'System maintenance'; S = @(@{ N = 'QWAVE'; D = 'Quality Windows Audio/Video Experience (streaming QoS)'; R = $false }) }
     @{ G = 'Remote Desktop & VPN'; S = @(@{ N = 'RasMan'; D = 'Remote Access Connection Manager - breaks built-in VPN'; R = $false }) }
     @{ G = 'Notifications'; S = @(@{ N = 'WpnService'; D = 'Windows Push Notifications System Service (leave default)'; R = $false }, @{ N = 'WpnUserService'; D = 'Push notifications user service (leave default)'; R = $false }) }
@@ -2689,7 +3261,7 @@ function Show-ServicesDialog {
 # ---------- Scheduled tasks ----------
 # ---------- Scheduled tasks ----------
 $script:TaskGroups = @(
-    @{ G = 'Telemetry & diagnostics (optional)'; R = $true; T = @(
+    @{ G = 'Telemetry & diagnostics'; R = $false; T = @(
             @('Compatibility appraiser', '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser'), @('Program data updater', '\Microsoft\Windows\Application Experience\ProgramDataUpdater'),
             @('Startup app task', '\Microsoft\Windows\Application Experience\StartupAppTask'), @('Customer experience reporting', '\Microsoft\Windows\Customer Experience Improvement Program\Consolidator'),
             @('USB usage reporting', '\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip'), @('Disk diagnostics collector', '\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector'),
@@ -2803,108 +3375,165 @@ function Check-ForUpdates {
 function Get-TweakByName([string]$Name) { return ($script:Tweaks | Where-Object { $_.Name -eq $Name } | Select-Object -First 1) }
 function Get-RecommendedPending { return @($script:Rows | Where-Object { -not $_.OneShot -and $_.T.Default -and $_.T.Risk -ne 'Expert' -and -not $_.Active }) }
 function Update-GameCard {
-    $h = $script:H; if (-not $h) { return }
-    $h.GameHost.Controls.Clear()
-    $exe = Find-FortniteExe -Quiet; $pc = $script:PageClr.GAMES
-    $card = New-Object Fz.FzCard; $card.Dock = 'Fill'; $card.Accent = $pc; $card.Stripe = $true; $card.Margin = New-Object Windows.Forms.Padding(0)
-    $card.Controls.Add((New-Lbl 'FORTNITE' 22 12 300 24 $script:Fnt.Mid $script:Clr.Text))
-    if ($exe) {
-        $keys = @('Disable V-Sync', 'Low scalability preset', 'Uncap frame rate (FrameRateLimit=0)')
-        $done = @($script:Rows | Where-Object { $keys -contains $_.T.Name -and $_.Active }).Count
-        $status = if ($done -ge 2) { 'CONFIGURED' } else { 'READY' }; $col = if ($done -ge 2) { $script:Clr.Good } else { $script:Clr.Warn }
-        $l1 = New-Lbl ("Epic Games   -   " + $exe) 22 40 700 18 $script:Fnt.Small $script:Clr.Dim; $l1.AutoEllipsis = $true; $card.Controls.Add($l1)
-    } else {
-        $card.Controls.Add((New-Lbl 'Not detected - launch Fortnite once, then press SCAN GAMES.' 22 40 700 18 $script:Fnt.Small $script:Clr.Warn))
-        $status = 'NOT FOUND'; $col = $script:Clr.Bad
-    }
-    $pill = New-Object Fz.FzPill; $pill.Text = $status; $pill.Tint = $col; $pill.Location = New-Object Drawing.Point(150, 14); $pill.Fit(); $card.Controls.Add($pill)
-    $open = New-Btn 'OPEN TWEAKS' 150 34 $true $pc 'arrow'; $open.Add_Click({ Show-Page 'GAMES' })
-    $card.Add_Resize({ $b = $this.Controls | Where-Object { $_ -is [Fz.FzButton] } | Select-Object -First 1; if ($b) { $b.Left = $this.Width - 170 } })
-    $open.Top = 24; $card.Controls.Add($open); $card.Width = 900; $card.Width = 901
-    $h.GameHost.Controls.Add($card)
+    # Redesigned dashboard uses the Category Navigation Grid
+    return
 }
 function Update-Home {
     $h = $script:H; if (-not $h) { return }
     $rows = @($script:Rows | Where-Object { -not $_.OneShot }); $act = @($rows | Where-Object { $_.Active }).Count
-    $h.Count.Text = "$act OF $($rows.Count) TWEAKS ACTIVE"
-    $rec = @(Get-RecommendedPending); $h.BtnRec.Text = "APPLY $($rec.Count) RECOMMENDATIONS"; $h.BtnRec.Enabled = ($rec.Count -gt 0)
-    $h.LastRP.Text = 'LAST RESTORE POINT:   ' + $script:LastRP
-    $p = Get-ActivePlan; $h.Plan.Text = $p.Name
+    if ($h.ContainsKey('Count') -and $h['Count']) { $h['Count'].Text = "$act OF $($rows.Count) TWEAKS ACTIVE" }
+    if ($h.ContainsKey('LiveLabels') -and $h['LiveLabels'] -and $h['LiveLabels'].ContainsKey('Tweaks Applied')) {
+        $h['LiveLabels']['Tweaks Applied'].Text = "$act / $($rows.Count)"
+    }
+    $rec = @(Get-RecommendedPending)
+    if ($h.ContainsKey('BtnRec') -and $h['BtnRec']) {
+        $h['BtnRec'].Text = "APPLY $($rec.Count) RECOMMENDATIONS"; $h['BtnRec'].Enabled = ($rec.Count -gt 0)
+    }
+    if ($h.ContainsKey('LastRP') -and $h['LastRP']) { $h['LastRP'].Text = 'LAST RESTORE POINT:   ' + $script:LastRP }
+    if ($h.ContainsKey('Plan') -and $h['Plan']) { $p = Get-ActivePlan; $h['Plan'].Text = $p.Name }
 }
 
 # ---------- Home page ----------
 function Build-Home {
-    $p = New-PageShell 'HOME' 'DASHBOARD' 'Live performance telemetry, detailed device information and reversible optimizations.' 108
-    $flow = $script:Pages['HOME'].Flow; $script:H = @{}; $ac = $script:PageClr.HOME
-    $hero = New-Object Fz.FzHero; $hero.Name = 'full'; $hero.Height = 176; $hero.Width = 900; $hero.Accent = $ac; $hero.Margin = New-Object Windows.Forms.Padding(0, 0, 12, 12)
-    $hero.Controls.Add((New-Lbl "// SYSTEM ONLINE" 38 22 400 18 $script:Fnt.MonoB $ac))
-    $hero.Controls.Add((New-Lbl 'Welcome to FRENZY TWEAKS' 34 40 760 70 $script:Fnt.Hero $script:Clr.Text))
-    # Premium brand accent: crisp, high-contrast typography without expensive animation.
-    $hero.Controls.Add((New-Lbl 'YOUR GAMING PERFORMANCE CONTROL CENTER' 38 91 480 17 $script:Fnt.MonoB $script:Clr.Dim))
-    $script:H.Count = New-Lbl '' 38 108 420 20 $script:Fnt.MonoB $ac; $hero.Controls.Add($script:H.Count)
-    $chip = ("{0}   |   {1}   |   {2}   |   {3} GB RAM" -f $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $script:Sys.Cpu, $script:GpuShort, $script:Sys.RamGB)
-    $cl = New-Lbl $chip 38 134 620 20 $script:Fnt.Small $script:Clr.Dim; $cl.AutoEllipsis = $true; $hero.Controls.Add($cl)
-    $script:H.BtnRec = New-Btn 'APPLY SELECTED TWEAKS' 300 46 $true $ac 'bolt'; $script:H.BtnRec.Top = 38
-    $script:H.BtnRec.Add_Click({ $r = @(Get-RecommendedPending); Invoke-Run @($r | ForEach-Object { $_.T }) @() })
-    $bRp = New-Btn 'CREATE RESTORE POINT' 300 40 $false $ac 'shield'; $bRp.Top = 96; $bRp.Add_Click({ New-RestorePoint })
-    $hero.Controls.Add($script:H.BtnRec); $hero.Controls.Add($bRp)
-    $hero.Tag = @($script:H.BtnRec, $bRp); $hero.Add_Resize({ foreach ($b in $this.Tag) { $b.Left = $this.Width - 330 } }); $hero.Width = 901
+    $p = New-Object Windows.Forms.Panel; $p.Dock = 'Fill'; $p.BackColor = $script:Clr.Bg; $p.Visible = $false
+    $script:H = @{}
+    $ac = [Fz.Theme]::Accent
+
+    # Outer split container: Center scrollable content (Fill) + Right fixed panel (270px)
+    $rightPanel = New-Object Windows.Forms.Panel; $rightPanel.Dock = 'Right'; $rightPanel.Width = 270; $rightPanel.BackColor = $script:Clr.Bg
+    $rightPanel.Padding = New-Object Windows.Forms.Padding(6, 16, 18, 16)
+
+    # 1. Right Card: System Info
+    $cardSys = New-Object Fz.FzCard; $cardSys.Dock = 'Top'; $cardSys.Height = 176; $cardSys.Radius = 10; $cardSys.Accent = $ac; $cardSys.Margin = New-Object Windows.Forms.Padding(0, 0, 0, 10)
+    $cardSys.Controls.Add((New-Lbl 'System Info' 38 12 180 20 $script:Fnt.Bold $script:Clr.Text))
+    $sysIcon = New-Object Windows.Forms.Panel; $sysIcon.Location = New-Object Drawing.Point(14, 12); $sysIcon.Size = New-Object Drawing.Size(18, 18); $sysIcon.BackColor = [Drawing.Color]::Transparent
+    $sysIcon.Add_Paint({ param($sn, $e) [Fz.Icons]::Draw($e.Graphics, 'monitor', (New-Object Drawing.RectangleF(0, 0, 16, 16)), [Fz.Theme]::AccentHi, 1.6) })
+    $cardSys.Controls.Add($sysIcon)
+
+    $sysRows = @(
+        @('OS', $script:Sys.OS),
+        @('CPU', $script:Sys.Cpu),
+        @('GPU', $script:GpuShort),
+        @('RAM', "$($script:Sys.RamGB) GB"),
+        @('Storage', "$($script:Sys.DiskFree) GB / $($script:Sys.DiskTotal) GB")
+    )
+    $sy = 40
+    foreach ($sr in $sysRows) {
+        $cardSys.Controls.Add((New-Lbl $sr[0] 16 $sy 60 16 $script:Fnt.Tiny $script:Clr.Dim))
+        $valLbl = New-Lbl $sr[1] 78 ($sy - 1) 160 16 $script:Fnt.Small $script:Clr.Text
+        $valLbl.AutoEllipsis = $true; $cardSys.Controls.Add($valLbl); $sy += 24
+    }
+
+    # 2. Right Card: Quick Actions
+    $cardAct = New-Object Fz.FzCard; $cardAct.Dock = 'Top'; $cardAct.Height = 224; $cardAct.Radius = 10; $cardAct.Accent = $ac; $cardAct.Margin = New-Object Windows.Forms.Padding(0, 10, 0, 10)
+    $cardAct.Controls.Add((New-Lbl 'Quick Actions' 38 12 180 20 $script:Fnt.Bold $script:Clr.Text))
+    $actIcon = New-Object Windows.Forms.Panel; $actIcon.Location = New-Object Drawing.Point(14, 12); $actIcon.Size = New-Object Drawing.Size(18, 18); $actIcon.BackColor = [Drawing.Color]::Transparent
+    $actIcon.Add_Paint({ param($sn, $e) [Fz.Icons]::Draw($e.Graphics, 'bolt', (New-Object Drawing.RectangleF(0, 0, 16, 16)), [Fz.Theme]::AccentHi, 1.6) })
+    $cardAct.Controls.Add($actIcon)
+
+    $bApplyAll = New-Btn 'Apply Recommended' 234 38 $true $ac 'bolt'; $bApplyAll.Location = New-Object Drawing.Point(12, 42)
+    $bApplyAll.Add_Click({ $r = @(Get-RecommendedPending); Invoke-Run @($r | ForEach-Object { $_.T }) @() })
+    $bCreateRP = New-Btn 'Create Restore Point' 234 34 $false $ac 'clock'; $bCreateRP.Location = New-Object Drawing.Point(12, 86); $bCreateRP.Add_Click({ New-RestorePoint })
+    $bOpenCln = New-Btn 'Open Cleanup' 234 34 $false $ac 'broom'; $bOpenCln.Location = New-Object Drawing.Point(12, 126); $bOpenCln.Add_Click({ Show-Page 'CLEANUP' })
+    $bViewLogs = New-Btn 'View Logs' 234 34 $false $ac 'sliders'; $bViewLogs.Location = New-Object Drawing.Point(12, 166); $bViewLogs.Add_Click({ if ($script:LogBox) { $script:LogBox.Focus() } })
+    $cardAct.Controls.AddRange(@($bApplyAll, $bCreateRP, $bOpenCln, $bViewLogs))
+
+    # 3. Right Card: Live Status
+    $cardStat = New-Object Fz.FzCard; $cardStat.Dock = 'Top'; $cardStat.Height = 170; $cardStat.Radius = 10; $cardStat.Accent = $ac; $cardStat.Margin = New-Object Windows.Forms.Padding(0, 10, 0, 0)
+    $cardStat.Controls.Add((New-Lbl 'Live Status' 38 12 180 20 $script:Fnt.Bold $script:Clr.Text))
+    $statDot = New-Object Windows.Forms.Panel; $statDot.Location = New-Object Drawing.Point(16, 14); $statDot.Size = New-Object Drawing.Size(14, 14); $statDot.BackColor = [Drawing.Color]::Transparent
+    $statDot.Add_Paint({ param($sn, $e) $e.Graphics.SmoothingMode = 'AntiAlias'; $b = New-Object Drawing.SolidBrush([Fz.Theme]::Good); $e.Graphics.FillEllipse($b, 1, 1, 10, 10); $b.Dispose() })
+    $cardStat.Controls.Add($statDot)
+
+    $stList = @(
+        @('System Check', 'Ready', [Fz.Theme]::Good),
+        @('Tweaks Applied', '0 / 0', [Fz.Theme]::AccentHi),
+        @('Protection Guard', $(if ($script:Guard) { 'Active' } else { 'Ready' }), [Fz.Theme]::Good),
+        @('System Restore', 'Ready', [Fz.Theme]::Good)
+    )
+    $sty = 42
+    $script:H.LiveLabels = @{}
+    foreach ($st in $stList) {
+        $cardStat.Controls.Add((New-Lbl $st[0] 16 $sty 120 18 $script:Fnt.Small $script:Clr.Dim))
+        $vlbl = New-Lbl $st[1] 140 $sty 90 18 $script:Fnt.SmallB $st[2]; $vlbl.TextAlign = 'MiddleRight'
+        $cardStat.Controls.Add($vlbl); $script:H.LiveLabels[$st[0]] = $vlbl; $sty += 28
+    }
+
+    $rightPanel.Controls.Add($cardStat)
+    $rightPanel.Controls.Add($cardAct)
+    $rightPanel.Controls.Add($cardSys)
+
+    # Center scrollable flow panel
+    $flow = New-Object Fz.FzFlow; $flow.Dock = 'Fill'; $flow.FlowDirection = 'LeftToRight'; $flow.WrapContents = $true
+    $flow.AutoScroll = $true; $flow.BackColor = $script:Clr.Bg; $flow.Padding = New-Object Windows.Forms.Padding(20, 16, 12, 16)
+    $flow.Add_Resize({ Fit-Flow $this })
+
+    # Center: Top Hero Welcome Banner
+    $hero = New-Object Fz.FzHero; $hero.Name = 'full'; $hero.Height = 144; $hero.Width = 840; $hero.Margin = New-Object Windows.Forms.Padding(0, 0, 12, 12)
     $flow.Controls.Add($hero)
 
-    # Hardware cards match the clean four-column overview in the reference UI.
-    $flow.Controls.Add((New-Section 'HARDWARE OVERVIEW' $ac))
-    $hardwareCards = @(
-        @('PROCESSOR', $script:Sys.Cpu, 'Installed CPU'),
-        @('GRAPHICS', $script:GpuShort, 'Installed GPU'),
-        @('MEMORY', ('{0} GB' -f $script:Sys.RamGB), 'System RAM'),
-        @('DEVICE', $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $script:Sys.Model)
+    # Center: 3-column Category Navigation Grid
+    $catGridData = @(
+        @('General', 'Optimize Windows settings for maximum performance.', 'gear', 'GENERAL'),
+        @('Input Delay', 'Reduce input lag and improve responsiveness.', 'bolt', 'INPUT'),
+        @('Network', 'Optimize network settings for better stability and lower ping.', 'wifi', 'NETWORK'),
+        @('Debloat', 'Remove unnecessary apps, services and bloatware.', 'trash', 'DEBLOAT'),
+        @('Services', 'Optimize Windows services for better performance.', 'layers', 'SERVICES'),
+        @('NVIDIA', 'Optimize NVIDIA settings and performance.', 'chip', 'GPU'),
+        @('AMD', 'Optimize AMD GPU settings and control panel.', 'chip', 'AMD'),
+        @('Intel', 'Optimize Intel GPU settings and performance.', 'chip', 'INTEL'),
+        @('Cleanup', 'Remove temporary files, cache and unnecessary data.', 'broom', 'CLEANUP'),
+        @('NVIDIA Profile Inspector', 'Advanced NVIDIA profile tweaks for better performance.', 'sliders', 'GAMES'),
+        @('Settings', 'App preferences and advanced options.', 'settings', 'SETTINGS')
     )
-    foreach ($item in $hardwareCards) {
-        $hc = New-Card 248 110 'quarter' $ac; $hc.Stripe = $true
-        $hc.Controls.Add((New-Lbl $item[0] 16 12 235 18 $script:Fnt.Tiny $ac))
-        $hv = New-Lbl $item[1] 16 40 210 26 $script:Fnt.Row $script:Clr.Text; $hv.AutoEllipsis = $true
-        $hs = New-Lbl $item[2] 16 78 210 18 $script:Fnt.Tiny $script:Clr.Good; $hs.AutoEllipsis = $true
-        $hc.Controls.AddRange(@($hv, $hs))
-        $hc.Add_Resize({ foreach ($v in $this.Controls) { if ($v -is [Windows.Forms.Label]) { $v.Width = $this.Width - 32 } } })
-        $flow.Controls.Add($hc)
+
+    foreach ($cat in $catGridData) {
+        $card = New-Object Fz.FzCategoryCard
+        $card.Name = 'third'
+        $card.Title = $cat[0]
+        $card.Description = $cat[1]
+        $card.Icon = $cat[2]
+        $card.Accent = $ac
+        $card.Width = 270; $card.Height = 74
+        $card.Margin = New-Object Windows.Forms.Padding(0, 0, 10, 10)
+        $card.Tag = $cat[3]
+        $card.Add_Click({ Show-Page $this.Tag })
+        $flow.Controls.Add($card)
     }
-    $flow.Controls.Add((New-Section 'PERFORMANCE MONITOR  /  5-SECOND REFRESH' $ac))
-    $script:Tiles.cpu = New-Tile 'CPU' (New-Rgb 255 106 0); $script:Tiles.gpu = New-Tile 'GPU' (New-Rgb 74 222 128)
-    $script:Tiles.mem = New-Tile 'MEMORY' (New-Rgb 77 141 255); $script:Tiles.net = New-Tile 'NETWORK' (New-Rgb 168 85 247)
-    foreach ($k in 'cpu', 'gpu', 'mem', 'net') { $flow.Controls.Add($script:Tiles[$k].Panel) }
 
-    $rb = New-Card 400 150 'half' (New-Rgb 255 61 139); $rb.Icon = 'shield'; $rb.IconSize = 22; $rb.IconX = 20; $rb.IconY = 18
-    $rb.Controls.Add((New-Lbl 'ROLLBACK SAFETY' 54 16 300 22 $script:Fnt.Mid $script:Clr.Text))
-    $rb.Controls.Add((New-Lbl 'Supported changes record original settings. Some actions cannot be undone automatically; review warnings before applying.' 22 50 440 36 $script:Fnt.Small $script:Clr.Dim))
-    $script:H.LastRP = New-Lbl '' 22 92 440 18 $script:Fnt.MonoB (New-Rgb 255 61 139); $rb.Controls.Add($script:H.LastRP)
-    $bsr = New-Btn 'OPEN SYSTEM RESTORE' 200 34 $false (New-Rgb 255 61 139) 'undo'; $bsr.Location = New-Object Drawing.Point(22, 108); $bsr.Add_Click({ Start-Process rstrui.exe }); $rb.Controls.Add($bsr)
-    $flow.Controls.Add($rb)
-    $so = New-Card 400 150 'half' (New-Rgb 77 141 255)
-    $so.Controls.Add((New-Lbl 'SYSTEM OVERVIEW' 22 14 300 22 $script:Fnt.Mid $script:Clr.Text))
-    $rowsInfo = @(@('DEVICE', $(if ($script:Sys.IsLaptop) { 'Laptop' } else { 'Desktop' }) + ' - ' + $script:Sys.Model), @('CPU', $script:Sys.Cpu), @('GPU', $script:GpuShort), @('MEMORY', "$($script:Sys.RamGB) GB"))
-    $yy = 44; foreach ($ri in $rowsInfo) { $so.Controls.Add((New-Lbl $ri[0] 22 $yy 80 16 $script:Fnt.Tiny $script:Clr.Dim)); $v = New-Lbl $ri[1] 100 ($yy - 2) 330 18 $script:Fnt.Small; $v.AutoEllipsis = $true; $so.Controls.Add($v); $yy += 22 }
-    $so.Controls.Add((New-Lbl 'POWER PLAN' 22 $yy 80 16 $script:Fnt.Tiny $script:Clr.Dim))
-    $script:H.Plan = New-Lbl '' 100 ($yy - 2) 330 18 $script:Fnt.Small (New-Rgb 77 141 255); $so.Controls.Add($script:H.Plan)
-    $flow.Controls.Add($so)
+    # Center: Bottom Feature Banner (Input Delay)
+    $featBanner = New-Object Fz.FzCard; $featBanner.Name = 'full'; $featBanner.Height = 76; $featBanner.Width = 840; $featBanner.Radius = 10; $featBanner.Accent = $ac
+    $featBanner.Margin = New-Object Windows.Forms.Padding(0, 6, 12, 12); $featBanner.Cursor = [Windows.Forms.Cursors]::Hand
+    $featBanner.Add_Paint({
+        param($sn, $e)
+        $g = $e.Graphics; [Fz.Gfx]::Quality($g)
+        # Left accent bar
+        $ab = New-Object Drawing.SolidBrush([Fz.Theme]::Accent)
+        $g.FillRectangle($ab, 0, 14, 4, ($sn.Height - 28))
+        $ab.Dispose()
+        # Text
+        $tf = [Fz.Theme]::T(18, $true)
+        $tb = New-Object Drawing.SolidBrush([Fz.Theme]::AccentBright)
+        $g.DrawString("INPUT DELAY", $tf, $tb, (New-Object Drawing.PointF(20, 16)))
+        $tb.Dispose()
+        $df = [Fz.Theme]::F(11, $false)
+        $db = New-Object Drawing.SolidBrush([Fz.Theme]::Dim)
+        $g.DrawString("LOWER LATENCY   /   FASTER REACTION   /   BETTER CONTROL", $df, $db, (New-Object Drawing.PointF(20, 44)))
+        $db.Dispose()
+        $tkw = [Fz.Theme]::T(16, $true)
+        $tb2 = New-Object Drawing.SolidBrush([Fz.Theme]::AccentHi)
+        $g.DrawString("T W E A K S", $tkw, $tb2, (New-Object Drawing.PointF(($sn.Width - 130), 28)))
+        $tb2.Dispose()
+    })
+    $featBanner.Add_Click({ Show-Page 'INPUT' })
+    $flow.Controls.Add($featBanner)
 
-    $flow.Controls.Add((New-Section 'QUICK ACTIONS' $ac))
-    $qa = New-Card 900 150 'full' $ac
-    $chkG = New-Object Fz.FzToggle; $chkG.OnColor = $ac; $chkG.Location = New-Object Drawing.Point(22, 18); $chkG.Checked = $script:Guard
-    $chkG.Add_CheckedChanged({ $script:Guard = $this.Checked; if ($script:DevLbl) { $script:DevLbl.Text = ('{0}   Guard {1}' -f $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $(if ($script:Guard) { 'ON' } else { 'OFF' })) }; Update-Home })
-    $qa.Controls.Add($chkG); $qa.Controls.Add((New-Lbl 'LAPTOP GUARD' 78 20 300 20 $script:Fnt.Row $script:Clr.Text))
-    $gtxt = if ($script:Sys.IsLaptop) { 'Laptop detected. Guard keeps your battery plan, sleep, sensors and display/biometric support intact: the performance plan only raises PLUGGED-IN values. Untick only if you know you want desktop-style behaviour.' } else { 'Desktop detected - Laptop Guard is off. Tick it to force plugged-in-only power changes.' }
-    $qa.Controls.Add((New-Lbl $gtxt 22 54 820 40 $script:Fnt.Small $script:Clr.Dim))
-    $bPow = New-Btn 'APPLY PERFORMANCE POWER PLAN' 290 38 $true $ac 'bolt'; $bPow.Location = New-Object Drawing.Point(22, 100)
-    $bPow.Add_Click({ $t = Get-TweakByName $script:PowerTweakName; if (Test-TweakActive $t) { [void][Fz.Msg]::Show('Already applied. Undo it from the GPU page if needed.', 'Power plan') } else { Invoke-Run @($t) @() } })
-    $bChk = New-Btn 'SYSTEM CHECKUP' 200 38 $false $ac 'scan'; $bChk.Location = New-Object Drawing.Point(326, 100); $bChk.Add_Click({ Show-Checkup })
-    $qa.Controls.AddRange(@($bPow, $bChk)); $flow.Controls.Add($qa)
-
-    $flow.Controls.Add((New-Section 'GAMES LIBRARY' $script:PageClr.GAMES))
-    $script:H.GameHost = New-Object Windows.Forms.Panel; $script:H.GameHost.Name = 'full'; $script:H.GameHost.Height = 84; $script:H.GameHost.Width = 900
-    $script:H.GameHost.BackColor = $script:Clr.Bg; $script:H.GameHost.Margin = New-Object Windows.Forms.Padding(0, 0, 12, 12)
-    $flow.Controls.Add($script:H.GameHost)
+    $p.Controls.Add($flow)
+    $p.Controls.Add($rightPanel)
+    $script:Pages['HOME'] = @{ Panel = $p; Flow = $flow; Header = $null; Footer = $null; FooterLbl = $null; Accent = $ac }
     return $p
 }
+
 
 # ---------- Debloat hub ----------
 function New-HubCard([string]$Title, [string]$Desc, [string]$BtnText, [scriptblock]$Fn, $Accent, [string]$Icon) {
@@ -2919,23 +3548,12 @@ function Build-Debloat {
     $p = New-PageShell 'DEBLOAT' 'DEBLOAT' 'Review optional apps, services, scheduled tasks and temporary files. Windows essentials stay protected.' 112
     $flow = $script:Pages['DEBLOAT'].Flow
     $flow.Controls.Add((New-HubCard 'Optional Apps' 'See every removable app on this PC. Tick the ones you want gone - glowing tiles show your selection - and confirm before anything is uninstalled.' 'REVIEW APPS' { Show-AppsDialog } (New-Rgb 255 61 139) 'apps'))
-    $flow.Controls.Add((New-HubCard 'Optional Services' 'Review optional services only. Do not disable audio, network, Windows Security/Update, GPU-driver, or anti-cheat services; original startup modes are saved.' 'REVIEW SERVICES' { Show-ServicesDialog } (New-Rgb 255 150 40) 'gear'))
-    $flow.Controls.Add((New-HubCard 'Scheduled Tasks' 'Recommended selection covers optional diagnostics/telemetry only. Keep Windows Update, security, anti-cheat and game-related tasks enabled; changes are restorable.' 'REVIEW TASKS' { Show-TasksDialog } (New-Rgb 255 210 63) 'clock'))
+    $flow.Controls.Add((New-HubCard 'Optional Services' 'Disable reviewed non-core services. The original startup mode is saved and can be re-enabled any time.' 'REVIEW SERVICES' { Show-ServicesDialog } (New-Rgb 255 150 40) 'gear'))
+    $flow.Controls.Add((New-HubCard 'Scheduled Tasks' 'Pause reviewed background jobs (telemetry, maintenance, sync). Exact task paths shown; restorable.' 'REVIEW TASKS' { Show-TasksDialog } (New-Rgb 255 210 63) 'clock'))
     $flow.Controls.Add((New-HubCard 'App Cache Cleanup' 'Clean Discord, Steam, Epic Launcher and temporary caches. Select items and review size before deleting.' 'OPEN APP CACHES' { Show-AppCacheCleanup } (New-Rgb 168 85 247) 'trash'))
     $flow.Controls.Add((New-HubCard 'Disk Cleanup' 'Find temporary files and caches you can remove. Shows exact sizes first; risky items are marked for review.' 'OPEN CLEANUP' { Show-DiskCleanup } (New-Rgb 74 222 128) 'trash'))
     $flow.Controls.Add((New-HubCard 'Windows Security' 'Core Windows components stay protected. Optionally exclude only the Fortnite folder from real-time scanning.' 'ADD FORTNITE EXCLUSION' { Invoke-Run @((Get-TweakByName 'Fortnite: Defender folder exclusion')) @() } (New-Rgb 34 211 238) 'shield'))
     $flow.Controls.Add((New-HubCard 'Remove Exclusion' 'Removes the Fortnite folder exclusion this tool added, restoring full real-time scanning of that folder.' 'REMOVE EXCLUSION' { Invoke-Run @() @((Get-TweakByName 'Fortnite: Defender folder exclusion')) } (New-Rgb 168 85 247) 'undo'))
-    $last = $null
-    foreach ($it in (Get-PageTweaks 'DEBLOAT')) {
-        if ($it.Group -ne $last) { Add-GroupHeader $flow 'DEBLOAT' $it.Group; $last = $it.Group }
-        [void](Add-TweakRow $flow $it.T 'DEBLOAT' $it.Group)
-    }
-    $foot = New-Object Windows.Forms.Panel; $foot.Dock = 'Bottom'; $foot.Height = 58; $foot.BackColor = $script:Clr.Side
-    $fl = New-Lbl 'Review selected changes before applying. Security updates are best left enabled.' 30 19 800 22 $script:Fnt.Small $script:Clr.Dim
-    $fbp = New-Object Windows.Forms.Panel; $fbp.Dock = 'Right'; $fbp.Width = 220; $fbp.BackColor = $script:Clr.Side
-    $fb = New-Btn 'APPLY CHANGES' 190 38 $true $script:PageClr.DEBLOAT 'check'; $fb.Location = New-Object Drawing.Point(8, 10); $fb.Add_Click({ Invoke-PagePending 'DEBLOAT' })
-    $fbp.Controls.Add($fb); $foot.Controls.Add($fl); $foot.Controls.Add($fbp); $p.Controls.Add($foot)
-    $script:Pages['DEBLOAT'].FooterLbl = $fl
     return $p
 }
 
@@ -2948,6 +3566,54 @@ function Update-GpuPower {
     $adj = ($null -ne $g.PowerMax -and $null -ne $g.PowerLimit -and $null -ne $g.PowerMin -and $g.PowerMax -gt $g.PowerMin -and $g.PowerLimit -lt $g.PowerMax)
     $w.Msg.Text = if ($adj) { 'The driver allows a higher power limit. It resets on reboot or driver restart.' } elseif ($null -eq $g.PowerMax) { 'The driver does not expose a power limit for this GPU.' } else { 'The driver does not expose an adjustable power-limit range for this GPU (common on laptops - the OEM fixes it).' }
     $w.Btn.Enabled = $adj; $w.Btn.Text = $(if ($adj) { 'SET TO MAXIMUM' } else { 'UNAVAILABLE' }); $w.Btn.Tag = $g
+}
+$script:NvNames = @{
+    '390467' = @('Low Latency Mode (profile value 2)', 'Driver low-latency queue setting from your profile; use together with in-game Reflex.')
+    '1686376' = @('Texture filtering: negative LOD bias = clamp', 'Stops negative-LOD shimmering.')
+    '3070157' = @('Image sharpening: off', 'No driver sharpening override.'); '3070158' = @('Sharpening denoising factor: 0', 'Companion to sharpening.')
+    '6505105' = @('DLSS model preset: default', 'No forced DLSS preset.'); '6600001' = @('Preferred refresh rate (profile value 0)', 'As stored in your profile.')
+    '8102046' = @('Max pre-rendered frames = 1', 'Short CPU render queue for lower input latency.'); '8703344' = @('Anisotropic filter optimization: on', 'Slightly cheaper anisotropic sampling.')
+    '11041231' = @('Vertical Sync: force off', 'Lowest presentation latency (tearing allowed).'); '11306135' = @('Shader disk cache size', 'Large persistent shader cache for fewer stutters.')
+    '273507943' = @('DLSS-FG multi-frame override: 0', 'No frame-generation override (generated frames add latency).'); '274197361' = @('Power management: prefer maximum performance', 'Keeps GPU clocks high while Fortnite runs (more heat on laptops).')
+    '276158834' = @('Ansel: off', 'Disables NVIDIA Ansel hooks.'); '276652957' = @('Antialiasing gamma correction (profile value)', 'As stored in your profile.')
+    '276757595' = @('Antialiasing mode: application controlled', 'No driver AA override.'); '277041152' = @('Frame-rate limiter low-latency mode', 'Driver low-latency path from your profile.')
+    '278196567' = @('VRR global feature: off', 'Matches uncapped, tearing-allowed play.'); '278196727' = @('VRR requested state: off', 'Companion VRR setting.')
+    '282245910' = @('Anisotropic filtering mode: user-defined', 'Lets the application choose.'); '283385329' = @('DLSS-FG preset override: off', 'No override.')
+    '283385347' = @('DLSS-FG override: off', 'No override.'); '294973784' = @('G-SYNC globally: off', 'Fortnite profile runs without G-SYNC.')
+}
+function Get-NipSettings {
+    $nip = Find-Nip; $raw = Get-Content -LiteralPath $nip -Raw
+    $out = New-Object System.Collections.ArrayList
+    foreach ($m in [regex]::Matches($raw, '(?s)<ProfileSetting>.*?</ProfileSetting>')) {
+        $id = [regex]::Match($m.Value, '<SettingID>(\d+)</SettingID>').Groups[1].Value
+        $nm = ([regex]::Match($m.Value, '<SettingNameInfo>(.*?)</SettingNameInfo>').Groups[1].Value).Trim()
+        $val = [regex]::Match($m.Value, '<SettingValue>(\d+)</SettingValue>').Groups[1].Value
+        $pair = $script:NvNames[$id]
+        $title = if ($pair) { $pair[0] } elseif ($nm) { $nm } else { "NVIDIA setting $id" }
+        $desc = if ($pair) { $pair[1] } else { '' }
+        [void]$out.Add([pscustomobject]@{ Id = $id; Title = $title; Desc = "$desc   [ID $id = $val]" })
+    }
+    return @($out)
+}
+function Invoke-NvApply {
+    if (-not $script:HasNvidia) { [void][Fz.Msg]::Show('No NVIDIA GPU detected.', 'NVIDIA'); return }
+    $ids = @($script:NvRows | Where-Object { $_.Chk.Checked } | ForEach-Object { $_.Id })
+    if ($ids.Count -eq 0) { return }
+    if ($script:chkDry.Checked) { Log "[DRY RUN] would import $($ids.Count) NVIDIA profile settings"; return }
+    if ([Fz.Msg]::Show("Import $($ids.Count) setting(s) into the NVIDIA 'Fortnite' profile (not your global profile)?", 'NVIDIA profile', 'YesNo', 'Question') -ne 'Yes') { return }
+    if ($script:chkRP.Checked -and -not $script:RPDone) { New-RestorePoint }
+    try {
+        $src = Get-Content -LiteralPath (Find-Nip) -Raw; $keep = $ids
+        $txt = [regex]::Replace($src, '(?s)\s*<ProfileSetting>.*?</ProfileSetting>', ([Text.RegularExpressions.MatchEvaluator]({ param($m) $id = [regex]::Match($m.Value, '<SettingID>(\d+)</SettingID>').Groups[1].Value; if ($keep -contains $id) { $m.Value } else { '' } }.GetNewClosure())))
+        $custom = Join-Path $script:Dir 'Custom_Fortnite_Profile.nip'
+        [IO.File]::WriteAllText($custom, $txt, (New-Object Text.UTF8Encoding($true)))
+        $npi = Find-NPI; if (-not $npi) { throw 'NVIDIA Profile Inspector not available.' }
+        $pr = Start-Process -FilePath $npi -ArgumentList "-silentImport `"$custom`"" -Wait -PassThru
+        Log "Profile Inspector exit code: $($pr.ExitCode)"
+        if ($pr.ExitCode -ne 0) { throw "NVIDIA Profile Inspector import failed with exit code $($pr.ExitCode). Settings were not marked as applied." }
+        foreach ($i in $ids) { $script:State["nv:$i"] = $true }; Save-State
+        foreach ($r in $script:NvRows) { if ($script:State.ContainsKey("nv:$($r.Id)")) { $r.Status.Text = "$DOT APPLIED"; $r.Status.ForeColor = $script:Clr.Good } }
+    } catch { Log "NVIDIA import failed: $($_.Exception.Message)" 'ERROR' }
 }
 function Build-Gpu {
     $pre = { param($flow)
@@ -2972,73 +3638,27 @@ function Build-Gpu {
     }
     $post = { param($flow)
         $ac = $script:PageClr.GPU
-        $flow.Controls.Add((New-Section 'NVIDIA PROFILE INSPECTOR - MANUAL IMPORT' $ac))
-        $card = New-Card 900 245 'full' $ac; $card.Stripe = $true
-        $card.Controls.Add((New-Lbl 'USE A FORTNITE GAME PROFILE, NOT GLOBAL SETTINGS' 22 14 820 24 $script:Fnt.Row $script:Clr.Text))
-        $steps = @(
-            '1. Download NVIDIA Profile Inspector from the official GitHub releases and extract the ZIP.',
-            '2. Click DOWNLOAD COMP PROFILE, select a folder, and save the bundled .nip file.',
-            '3. Open nvidiaProfileInspector.exe. Open the profile selector/search at the top and search for Fortnite.',
-            '4. Select the Fortnite profile (not Global Profile), then drag Comp_Fortnite_Profile.nip onto the inspector window.',
-            '5. Review the imported settings and click Apply changes. Export/back up your current profile first if you may want to undo it.'
-        )
-        $yy = 44
-        foreach ($step in $steps) { $card.Controls.Add((New-Lbl ($DOT + '  ' + $step) 22 $yy 840 24 $script:Fnt.Small $script:Clr.Dim)); $yy += 30 }
-        $download = New-Btn 'OPEN OFFICIAL DOWNLOADS' 240 36 $true $ac 'arrow'
-        $download.Location = New-Object Drawing.Point(22, 202)
-        $download.Add_Click({ Start-Process 'https://github.com/Orbmu2k/nvidiaProfileInspector/releases' })
-        $profile = New-Btn 'DOWNLOAD COMP PROFILE' 260 36 $false $ac 'folder'
-        $profile.Location = New-Object Drawing.Point(276, 202)
-        $profile.Add_Click({
-            $save = New-Object System.Windows.Forms.SaveFileDialog
-            try {
-                $save.Title = 'Save Fortnite NVIDIA profile'
-                $save.FileName = 'Comp_Fortnite_Profile.nip'
-                $save.Filter = 'NVIDIA Profile Inspector (*.nip)|*.nip'
-                $save.DefaultExt = 'nip'
-                $save.AddExtension = $true
-                $save.OverwritePrompt = $true
-                if ($save.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
-                $bytes = [Convert]::FromBase64String($script:NipB64)
-                [System.IO.File]::WriteAllBytes($save.FileName, $bytes)
-                Log "Saved Comp Fortnite profile to $($save.FileName)" 'SUCCESS'
-                [System.Windows.Forms.MessageBox]::Show('Profile saved. Open NVIDIA Profile Inspector, select the Fortnite game profile, import the .nip, review settings, and apply changes.', 'FRENZY TWEAKS', 'OK', 'Information') | Out-Null
-            } catch { Log "Could not save Comp Fortnite profile: $($_.Exception.Message)" 'ERROR' }
-            finally { $save.Dispose() }
-        })
-        $card.Controls.Add($download); $card.Controls.Add($profile); $flow.Controls.Add($card)
-        $note = New-Card 900 68 'full' $script:Clr.Warn
-        $note.Controls.Add((New-Lbl 'Profile settings can vary by driver and hardware. Avoid applying a .nip to Global Profile unless you intentionally want the settings system-wide.' 22 14 840 40 $script:Fnt.Small $script:Clr.Warn))
-        $flow.Controls.Add($note)
+        $flow.Controls.Add((New-Section 'NVIDIA PROFILE (applied to the Fortnite profile only)' $ac))
+        $script:NvRows = New-Object System.Collections.ArrayList
+        if (-not $script:HasNvidia) {
+            $n = New-Card 900 54 'full' $script:Clr.Warn; $n.Controls.Add((New-Lbl 'No NVIDIA GPU detected - NVIDIA profile settings are unavailable on this PC.' 22 16 800 20 $script:Fnt.Norm $script:Clr.Warn)); $flow.Controls.Add($n); return
+        }
+        foreach ($s in (Get-NipSettings)) {
+            $row = New-Card 480 84 'half' $ac
+            $chk = New-Object Fz.FzToggle; $chk.OnColor = $ac; $chk.Top = 12; $chk.Checked = $true; $row.Lit = $true
+            $chk.Tag = $row; $chk.Add_CheckedChanged({ $this.Tag.Lit = $this.Checked })
+            $st = New-Lbl '' 0 60 160 16 $script:Fnt.Tiny $script:Clr.Dim; $st.TextAlign = 'MiddleRight'
+            if ($script:State.ContainsKey("nv:$($s.Id)")) { $st.Text = "$DOT APPLIED"; $st.ForeColor = $script:Clr.Good } else { $st.Text = 'NOT APPLIED' }
+            $nl = New-Lbl $s.Title 18 12 380 22 $script:Fnt.Row $script:Clr.Text; $nl.AutoEllipsis = $true
+            $dl = New-Lbl $s.Desc 18 36 440 22 $script:Fnt.Small $script:Clr.Dim; $dl.AutoEllipsis = $true
+            $row.Controls.AddRange(@($nl, $dl, $st, $chk)); $row.Tag = @($chk, $nl, $dl, $st)
+            $row.Add_Resize({ $t = $this.Tag; $t[0].Left = $this.Width - 62; $t[1].Width = $this.Width - 100; $t[2].Width = $this.Width - 36; $t[3].Left = $this.Width - 176 }); $row.Width = 481
+            $flow.Controls.Add($row); [void]$script:NvRows.Add([pscustomobject]@{ Id = $s.Id; Chk = $chk; Status = $st })
+        }
+        $bn = New-Btn 'APPLY SELECTED NVIDIA SETTINGS' 340 40 $true $ac 'bolt'; $bn.Margin = New-Object Windows.Forms.Padding(0, 8, 12, 0); $bn.Add_Click({ Invoke-NvApply }); $flow.Controls.Add($bn)
+        $hint = New-Lbl 'To revert: open NVIDIA Profile Inspector, select the Fortnite profile and choose Restore profile to defaults.' 0 0 800 22 $script:Fnt.Small $script:Clr.Dim; $hint.Name = 'full'; $hint.Margin = New-Object Windows.Forms.Padding(0, 14, 0, 0); $flow.Controls.Add($hint)
     }
-    return (Build-TweakPage 'GPU' 'GPU' 'Sensors, power limit, PCIe power saving, scheduling and manual Fortnite profile import guidance.' $pre $post)
-}
-
-# ---------- Read-only input diagnostics ----------
-function Build-InputDiagnostics {
-    $pre = { param($flow)
-        $ac = $script:PageClr.INPUT
-        $flow.Controls.Add((New-Section 'MOUSE & INPUT DIAGNOSTICS' $ac))
-        $card = New-Card 900 160 'full' $ac
-        $status = New-Lbl 'Click SCAN to inspect pointer settings.' 22 45 820 75 $script:Fnt.Small $script:Clr.Dim
-        $card.Controls.Add((New-Lbl 'WINDOWS MOUSE SETTINGS (READ-ONLY)' 22 12 620 24 $script:Fnt.Row $script:Clr.Text))
-        $card.Controls.Add($status)
-        $btn = New-Btn 'SCAN INPUT SETTINGS' 205 32 $true $ac 'search'
-        $btn.Location = New-Object Drawing.Point(660, 10)
-        $btn.Add_Click({
-            try {
-                $mouse = Get-ItemProperty 'HKCU:\Control Panel\Mouse' -ErrorAction Stop
-                $speed = $mouse.MouseSensitivity
-                $enhanced = if ($mouse.MouseSpeed -eq '0') { 'Off' } else { 'On (acceleration)' }
-                $status.Text = "Pointer sensitivity: $speed / 20`nEnhance pointer precision: $enhanced`nMouse polling rate requires raw HID input measurement; this scan does not estimate it."
-                Log 'Mouse settings scan completed (read-only)' 'SUCCESS'
-            } catch { $status.Text = 'Unable to read pointer settings: ' + $_.Exception.Message; Log $status.Text 'WARN' }
-        }.GetNewClosure())
-        $card.Controls.Add($btn)
-        $card.Controls.Add((New-Lbl 'Check mouse firmware/software for hardware polling rate. USB stability, overlays and frame times can affect responsiveness.' 22 130 850 18 $script:Fnt.Tiny $script:Clr.Dim))
-        $flow.Controls.Add($card)
-    }
-    return (Build-TweakPage 'INPUT' 'INPUT DELAY' 'Mouse, pointer settings and input responsiveness diagnostics.' $pre)
+    return (Build-TweakPage 'GPU' 'NVIDIA' 'Sensors, power limit, PCIe power saving, scheduling and the Fortnite NVIDIA profile.' $pre $post)
 }
 
 # ---------- Network ----------
@@ -3120,7 +3740,6 @@ function Invoke-PingScan {
             Set-Hop 3 ("BEST: " + $bestR.Key.ToUpper()) ($txt + "`n(approx. via AWS regional endpoints)") $col
             $script:PingLbl.Text = "{0:N0} ms" -f $bestR.Value
         }
-        if ($script:RouterStats) { $script:LossLbl.Text = ('{0}% (gateway)' -f $script:RouterStats.Loss) }
         $script:JitLbl.Text = if ($script:RouterStats.Avg) { "{0:N1} ms (router)" -f $script:RouterStats.Jitter } else { '--' }
         $script:ConnLbl.Text = if ($wifi) { 'Wi-Fi' } else { 'Ethernet' }
     } catch { if ($_.Exception.Message -ne 'offline') { Log "Scan error: $($_.Exception.Message)" 'WARN' } }
@@ -3174,47 +3793,23 @@ function Build-Network {
             $c.Controls.Add($s); $c.Controls.Add($d); $c.Tag = @($s, $d); $c.Add_Resize({ $this.Tag[0].Width = $this.Width - 36; $this.Tag[1].Width = $this.Width - 36 })
             $flow.Controls.Add($c); $script:Hops += @{ Status = $s; Detail = $d }
         }
-        $act = New-Card 900 135 'full' $ac
-        $script:ScanBtn = New-Btn 'ANALYZE NETWORK LATENCY' 270 40 $true $ac 'scan'; $script:ScanBtn.Location = New-Object Drawing.Point(22, 14); $script:ScanBtn.Add_Click({ Invoke-PingScan })
+        $act = New-Card 900 108 'full' $ac
+        $script:ScanBtn = New-Btn 'RUN PING OPTIMIZER SCAN' 270 40 $true $ac 'scan'; $script:ScanBtn.Location = New-Object Drawing.Point(22, 14); $script:ScanBtn.Add_Click({ Invoke-PingScan })
         $script:BtnDns = New-Btn 'APPLY BEST DNS' 250 40 $false $ac 'check'; $script:BtnDns.Location = New-Object Drawing.Point(304, 14); $script:BtnDns.Enabled = $false; $script:BtnDns.Add_Click({ Set-BestDns })
         $bR = New-Btn 'RESTORE NETWORK DEFAULTS' 260 40 $false $ac 'undo'; $bR.Location = New-Object Drawing.Point(568, 14); $bR.Add_Click({ Restore-NetworkDefaults })
         $act.Controls.AddRange(@($script:ScanBtn, $script:BtnDns, $bR))
         $act.Controls.Add((New-Lbl 'BEST PING' 22 66 150 14 $script:Fnt.Tiny $script:Clr.Dim)); $script:PingLbl = New-Lbl '--' 22 80 200 22 $script:Fnt.Bold; $act.Controls.Add($script:PingLbl)
         $act.Controls.Add((New-Lbl 'JITTER' 250 66 150 14 $script:Fnt.Tiny $script:Clr.Dim)); $script:JitLbl = New-Lbl '--' 250 80 220 22 $script:Fnt.Bold; $act.Controls.Add($script:JitLbl)
         $act.Controls.Add((New-Lbl 'CONNECTION' 500 66 150 14 $script:Fnt.Tiny $script:Clr.Dim)); $script:ConnLbl = New-Lbl '--' 500 80 220 22 $script:Fnt.Bold; $act.Controls.Add($script:ConnLbl)
-        $act.Controls.Add((New-Lbl 'PACKET LOSS' 730 66 140 14 $script:Fnt.Tiny $script:Clr.Dim)); $script:LossLbl = New-Lbl '--' 730 80 150 22 $script:Fnt.Bold; $act.Controls.Add($script:LossLbl)
-        $act.Controls.Add((New-Lbl 'DNS comparison is measured from this PC. Faster DNS lookups do not guarantee lower in-game ping.' 22 113 850 16 $script:Fnt.Tiny $script:Clr.Dim))
         $flow.Controls.Add($act)
     }
-    return (Build-TweakPage 'NETWORK' 'NETWORKING' 'Measure gateway ping, jitter, loss, DNS response times and regional TCP reachability.' $pre)
+    return (Build-TweakPage 'NETWORK' 'NETWORK' 'Scan your route, fix the weak hop, and tune the Windows network stack.' $pre)
 }
 
 # ---------- Fortnite page ----------
 function Build-Games {
     $pre = { param($flow)
         $ac = $script:PageClr.GAMES
-        $flow.Controls.Add((New-Section 'AUTO-DETECTION' $ac))
-        $det = New-Card 900 165 'full' $ac
-        $det.Controls.Add((New-Lbl 'FORTNITE INSTALLATION / STATUS' 22 10 600 24 $script:Fnt.Row $script:Clr.Text))
-        $detText = New-Lbl 'Checking Fortnite...' 22 38 790 88 $script:Fnt.Small $script:Clr.Dim
-        $det.Controls.Add($detText)
-        $renderStatus = {
-            try {
-                $v = Get-FrenzyFortniteStatus
-                $exeText = if ($v.Exe) { $v.Exe } else { 'Not found in Epic manifests / common folders' }
-                $cfgText = if ($v.Config) { $v.Config } else { 'Not found; launch Fortnite once' }
-                $runText = if ($v.Running) { 'RUNNING - close game before editing' } else { 'Not running' }
-                $detText.Text = "Install: $exeText`nConfig: $cfgText`nGame: $runText   |   Renderer: $($v.Mode)"
-                Log 'Fortnite installation/status refreshed' 'INFO'
-            } catch { $detText.Text = "Fortnite scan failed: $($_.Exception.Message)"; Log $detText.Text 'WARN' }
-        }.GetNewClosure()
-        $detBtn = New-Btn 'REFRESH DETECTION' 200 30 $false $ac 'search'
-        $detBtn.Location = New-Object Drawing.Point(670, 12)
-        $detBtn.Add_Click($renderStatus)
-        $det.Controls.Add($detBtn)
-        $det.Controls.Add((New-Lbl 'Rendering mode may not be stored reliably in the INI. Always verify it in Fortnite.' 22 135 830 16 $script:Fnt.Tiny $script:Clr.Dim))
-        $flow.Controls.Add($det)
-        & $renderStatus
         $flow.Controls.Add((New-Section 'SET THESE IN-GAME' $ac))
         $gc = New-Card 900 178 'full' $ac; $gc.Stripe = $true
         $gc.Controls.Add((New-Lbl 'No script can do this reliably - set them in Fortnite:' 22 12 800 22 $script:Fnt.Row $script:Clr.Text))
@@ -3225,200 +3820,26 @@ function Build-Games {
             'Close Fortnite before applying config tweaks - the game rewrites its settings file when it exits')
         $y = 44; foreach ($t in $tips) { $l = New-Lbl ($DOT + '  ' + $t) 22 $y 1000 20 $script:Fnt.Small $script:Clr.Dim; $gc.Controls.Add($l); $y += 26 }
         $flow.Controls.Add($gc)
-        $iniCard = New-Card 900 112 'full' $ac; $iniCard.Stripe = $true
-        $iniCard.Controls.Add((New-Lbl 'GAMEUSERSETTINGS.INI DETECTION' 22 12 420 22 $script:Fnt.Row $script:Clr.Text))
-        $iniStatus = New-Lbl '' 22 40 650 36 $script:Fnt.Small $script:Clr.Dim; $iniStatus.AutoEllipsis = $true
-        $iniCard.Controls.Add($iniStatus)
-        $iniHint = New-Lbl 'Detection is read-only. Close Fortnite before applying any config changes.' 22 80 630 18 $script:Fnt.Tiny $script:Clr.Dim
-        $iniCard.Controls.Add($iniHint)
-        # Capture real Color objects before GetNewClosure changes the script scope.
-        $iniGoodColor = [Drawing.Color]::FromArgb(74, 222, 128)
-        $iniWarnColor = [Drawing.Color]::FromArgb(255, 193, 7)
-        $refreshIni = {
-            $path = Find-FnConfig
-            if ($path) { $iniStatus.Text = "FOUND: $path"; $iniStatus.ForeColor = $iniGoodColor }
-            else { $iniStatus.Text = 'NOT FOUND. Launch Fortnite once, close it, then scan again or locate the file manually.'; $iniStatus.ForeColor = $iniWarnColor }
-        }.GetNewClosure()
-        $scan = New-Btn 'SCAN / LOCATE INI' 190 36 $true $ac 'search'
-        $scan.Location = New-Object Drawing.Point(680, 38)
-        $scan.Add_Click({
-            $path = Find-FnConfig
-            if (-not $path) { $path = Find-FnConfig -Prompt }
-            if ($path) { $iniStatus.Text = "FOUND: $path"; $iniStatus.ForeColor = $iniGoodColor }
-            else { $iniStatus.Text = 'NOT FOUND. Launch Fortnite once and try again.'; $iniStatus.ForeColor = $iniWarnColor }
-        }.GetNewClosure())
-        $iniCard.Controls.Add($scan); $flow.Controls.Add($iniCard); & $refreshIni
     }
-    return (Build-TweakPage 'GAMES' 'FORTNITE' 'Auto-detect GameUserSettings.ini and apply reversible config values; close Fortnite before applying.' $pre)
-}
-
-# ---------- Read-only Fortnite installation / status ----------
-function Get-FrenzyFortniteStatus {
-    $exe = Find-FortniteExe -Quiet
-    $cfg = Find-FnConfig
-    $running = [bool](Get-Process -Name 'FortniteClient-Win64-Shipping' -ErrorAction SilentlyContinue)
-    $mode = 'Unknown (check in-game video settings)'
-    if ($cfg) {
-        try {
-            $raw = [IO.File]::ReadAllText($cfg)
-            # The INI can suggest the selected renderer but may not be authoritative after updates.
-            if ($raw -match '(?im)^PreferredRHI\s*=\s*(.+)$') {
-                $v = $Matches[1].Trim()
-                if ($v -match 'dx12|d3d12') { $mode = 'DirectX 12 (INI indication)' }
-                elseif ($v -match 'dx11|d3d11') { $mode = 'DirectX 11 (INI indication)' }
-                else { $mode = "$v (INI indication; verify in game)" }
-            } elseif ($raw -match '(?im)^bUsePerformanceMode\s*=\s*True') { $mode = 'Performance (INI indication)' }
-        } catch { $mode = 'Unable to read config' }
-    }
-    return @{ Exe = $exe; Config = $cfg; Running = $running; Mode = $mode }
-}
-
-# ---------- V4 read-only diagnostics ----------
-function Get-FrenzyThermals {
-    $lines = New-Object Collections.Generic.List[string]
-    $lines.Add('THERMAL AND CLOCK DATA (READ-ONLY)')
-    $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cpu) { $lines.Add("CPU clock: $($cpu.CurrentClockSpeed) MHz  |  Max reported: $($cpu.MaxClockSpeed) MHz") }
-    # ACPI ThermalZone data is not generally a CPU-core sensor; do not mislabel it.
-    $lines.Add('CPU core temperature: unavailable through standard Windows WMI; use trusted sensor software.')
-    $nv = Get-NvSmi
-    if ($nv) {
-        $lines.Add("NVIDIA GPU: $($nv.Name)")
-        $lines.Add("GPU temperature: $(if ($null -ne $nv.Temp) { "$($nv.Temp) C" } else { 'unavailable' })  |  Load: $(if ($null -ne $nv.Load) { "$($nv.Load)%" } else { 'unavailable' })")
-        $lines.Add("GPU power state: $($nv.PState)  |  Power: $($nv.PowerDraw) W")
-        try {
-            $clocks = & $script:NvSmiPath '--query-gpu=clocks.current.graphics,clocks.current.memory,clocks_throttle_reasons.active' '--format=csv,noheader,nounits' 2>$null | Select-Object -First 1
-            if ($clocks) { $lines.Add("NVIDIA clocks / throttle flags: $($clocks.Trim())") }
-        } catch { $lines.Add('GPU throttle flags unavailable on this driver.') }
-    } else { $lines.Add('GPU temperature / throttle flags: unavailable (NVIDIA-SMI unsupported or missing).') }
-    $lines.Add('Throttle reasons need driver/sensor confirmation; a low clock by itself does not prove throttling.')
-    return ($lines -join "`r`n")
-}
-function Get-FrenzyStorageHealth {
-    $lines = New-Object Collections.Generic.List[string]
-    $lines.Add('STORAGE HEALTH (READ-ONLY)')
-    $fortnite = Find-FortniteExe -Quiet
-    if ($fortnite) { $lines.Add("Fortnite: $fortnite") } else { $lines.Add('Fortnite installation: not found') }
-    try {
-        $disks = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction Stop)
-        foreach ($d in $disks) {
-            $free = [math]::Round([double]$d.FreeSpace / 1GB, 1)
-            $total = [math]::Round([double]$d.Size / 1GB, 1)
-            $tag = if ($fortnite -and $fortnite.StartsWith($d.DeviceID, [StringComparison]::OrdinalIgnoreCase)) { '  [FORTNITE DRIVE]' } else { '' }
-            $lines.Add("$($d.DeviceID)   $free GB free / $total GB total$tag")
-        }
-    } catch { $lines.Add("Drive space unavailable: $($_.Exception.Message)") }
-    try {
-        $pd = @(Get-PhysicalDisk -ErrorAction Stop)
-        foreach ($d in $pd) {
-            $lines.Add("Physical disk: $($d.FriendlyName)  |  Media: $($d.MediaType)  |  Health: $($d.HealthStatus)")
-        }
-        $lines.Add('Physical disk inventory does not establish the Fortnite volume mapping on all storage controllers.')
-    } catch { $lines.Add('Physical disk health/media data unavailable on this Windows/storage controller.') }
-    return ($lines -join "`r`n")
-}
-function Get-FrenzyDisplayInfo {
-    $lines = New-Object Collections.Generic.List[string]
-    $lines.Add('DISPLAY SETTINGS (READ-ONLY)')
-    foreach ($s in [Windows.Forms.Screen]::AllScreens) {
-        $lines.Add("$($s.DeviceName)  |  $($s.Bounds.Width)x$($s.Bounds.Height)  |  Primary: $($s.Primary)")
-    }
-    try {
-        $video = @(Get-CimInstance Win32_VideoController -ErrorAction Stop)
-        foreach ($v in $video) {
-            if ($v.CurrentRefreshRate -and $v.CurrentRefreshRate -lt 1000) { $lines.Add("$($v.Name)  |  Driver-reported refresh: $($v.CurrentRefreshRate) Hz") }
-        }
-    } catch { $lines.Add('Driver-reported refresh rate unavailable.') }
-    $lines.Add('Verify the active monitor refresh rate in Windows Settings > System > Display > Advanced display.')
-    $lines.Add('Higher refresh rates may improve perceived smoothness; FPS, frame times and the display path also matter.')
-    return ($lines -join "`r`n")
-}
-function Measure-FrenzyBaseline {
-    $cpu = $null; $mem = $null; $ping = @(); $loss = 0
-    try {
-        $cpu = [math]::Round([double]((Get-CimInstance Win32_Processor -ErrorAction Stop | Measure-Object -Property LoadPercentage -Average).Average), 1)
-        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
-        $mem = [math]::Round(100 * (1 - [double]$os.FreePhysicalMemory / [double]$os.TotalVisibleMemorySize), 1)
-    } catch {}
-    $p = New-Object Net.NetworkInformation.Ping
-    try {
-        for ($i=0; $i -lt 6; $i++) {
-            try { $r = $p.Send('1.1.1.1', 1200); if ($r.Status -eq 'Success') { $ping += [double]$r.RoundtripTime } else { $loss++ } } catch { $loss++ }
-            [Windows.Forms.Application]::DoEvents()
-        }
-    } finally { $p.Dispose() }
-    $avg = if ($ping.Count) { [math]::Round(($ping | Measure-Object -Average).Average, 1) } else { $null }
-    $jitter = $null
-    if ($ping.Count -gt 1) {
-        $delta = @(); for ($i=1; $i -lt $ping.Count; $i++) { $delta += [math]::Abs($ping[$i] - $ping[$i-1]) }
-        $jitter = [math]::Round(($delta | Measure-Object -Average).Average, 1)
-    }
-    return [pscustomobject]@{ When=(Get-Date).ToString('g'); CPU=$cpu; Memory=$mem; Ping=$avg; Jitter=$jitter; Loss=[math]::Round(100*$loss/6,1) }
-}
-function Format-FrenzyBaseline($b) {
-    if (-not $b) { return 'No measurement saved yet.' }
-    return "Captured: $($b.When)`r`nCPU load: $($b.CPU)%  |  RAM used: $($b.Memory)%`r`nPing: $($b.Ping) ms  |  Jitter: $($b.Jitter) ms  |  Loss: $($b.Loss)%"
-}
-function Build-V4Diagnostics {
-    $p = New-PageShell 'DIAGNOSTICS' 'SYSTEM DIAGNOSTICS' 'Read-only hardware checks, real network samples and benchmark comparison.' 112
-    $flow = $script:Pages['DIAGNOSTICS'].Flow; $ac = $script:PageClr.DIAGNOSTICS
-    foreach ($item in @(
-        @('THERMAL & THROTTLING', 'READ SENSORS', 'Get-FrenzyThermals'),
-        @('STORAGE HEALTH', 'SCAN DRIVES', 'Get-FrenzyStorageHealth'),
-        @('DISPLAY & REFRESH RATE', 'CHECK DISPLAY', 'Get-FrenzyDisplayInfo')
-    )) {
-        $c = New-Card 900 174 'full' $ac
-        $c.Controls.Add((New-Lbl $item[0] 22 12 580 23 $script:Fnt.Row $script:Clr.Text))
-        $output = New-Object Windows.Forms.TextBox
-        $output.Multiline = $true; $output.ReadOnly = $true; $output.ScrollBars = 'Vertical'
-        $output.Location = New-Object Drawing.Point(22, 46); $output.Size = New-Object Drawing.Size(845, 113)
-        $output.BackColor = $script:Clr.Card; $output.ForeColor = $script:Clr.Text; $output.BorderStyle = 'None'; $output.Font = $script:Fnt.Small
-        $output.Text = 'Click Scan to collect available hardware readings.'
-        $c.Controls.Add($output)
-        $button = New-Btn $item[1] 210 32 $false $ac 'scan'; $button.Location = New-Object Drawing.Point(650, 8)
-        $fn = [string]$item[2]
-        $button.Add_Click({
-            $this.Enabled = $false
-            try { $output.Text = & $fn; Log "$fn completed" }
-            catch { $output.Text = "Scan failed: $($_.Exception.Message)"; Log $output.Text 'WARN' }
-            finally { $this.Enabled = $true }
-        }.GetNewClosure())
-        $c.Controls.Add($button); $flow.Controls.Add($c)
-    }
-    $flow.Controls.Add((New-Section 'BEFORE / AFTER BENCHMARK' $ac))
-    $card = New-Card 900 252 'full' $ac
-    $script:BenchOutput = New-Object Windows.Forms.TextBox
-    $script:BenchOutput.Multiline = $true; $script:BenchOutput.ReadOnly = $true; $script:BenchOutput.ScrollBars = 'Vertical'
-    $script:BenchOutput.Location = New-Object Drawing.Point(22, 75)
-    $script:BenchOutput.Size = New-Object Drawing.Size(835, 155)
-    $script:BenchOutput.Font = $script:Fnt.Small; $script:BenchOutput.BackColor = $script:Clr.Card; $script:BenchOutput.ForeColor = $script:Clr.Text; $script:BenchOutput.BorderStyle = 'None'
-    $script:BenchOutput.Text = 'Capture a BEFORE sample; make your changes; then capture AFTER under comparable conditions. Network target: 1.1.1.1 (not a Fortnite server).'
-    $before = New-Btn 'CAPTURE BEFORE' 195 36 $true $ac 'scan'; $before.Location = New-Object Drawing.Point(22, 18)
-    $after = New-Btn 'CAPTURE AFTER' 195 36 $false $ac 'scan'; $after.Location = New-Object Drawing.Point(233, 18)
-    $before.Add_Click({
-        $this.Enabled = $false
-        try {
-            $script:BenchBefore = Measure-FrenzyBaseline
-            $script:BenchOutput.Text = "BEFORE`r`n$(Format-FrenzyBaseline $script:BenchBefore)`r`n`r`nCapture AFTER under comparable conditions."
-            Log 'Before benchmark captured'
-        } catch { Log "Benchmark failed: $($_.Exception.Message)" 'ERROR' } finally { $this.Enabled = $true }
-    })
-    $after.Add_Click({
-        if (-not $script:BenchBefore) { [void][Fz.Msg]::Show('Capture BEFORE first.', 'Benchmark'); return }
-        $this.Enabled = $false
-        try {
-            $a = Measure-FrenzyBaseline; $b = $script:BenchBefore
-            $script:BenchOutput.Text = "BEFORE`r`n$(Format-FrenzyBaseline $b)`r`n`r`nAFTER`r`n$(Format-FrenzyBaseline $a)`r`n`r`nCompare numbers in identical conditions; lower ping/jitter/loss is usually better. CPU load is workload-dependent. This is not an FPS benchmark."
-            Log 'After benchmark captured'
-        } catch { Log "Benchmark failed: $($_.Exception.Message)" 'ERROR' } finally { $this.Enabled = $true }
-    })
-    $card.Controls.AddRange(@($before,$after,$script:BenchOutput)); $flow.Controls.Add($card)
-    return $p
+    return (Build-TweakPage 'GAMES' 'NVIDIA PROFILE INSPECTOR' 'In-game configuration, GPU preference, anti-cheat-safe priority and session cleanup.' $pre)
 }
 
 # ---------- Premium centers ----------
+function Build-CleanupCenter {
+    $p = New-PageShell 'CLEANUP' 'CLEANUP' 'Review storage first. Clearing caches can make applications rebuild data.' 112
+    $f = $script:Pages['CLEANUP'].Flow
+    $f.Controls.Add((New-Section 'SELECTIVE STORAGE CLEANUP' $script:PageClr.CLEANUP))
+    $f.Controls.Add((New-HubCard 'DISCORD / STEAM / EPIC CACHES' 'Review app cache sizes and select exactly what to remove. Close the affected app first.' 'REVIEW APP CACHES' { Show-AppCacheCleanup } $script:PageClr.CLEANUP 'trash'))
+    $f.Controls.Add((New-HubCard 'WINDOWS TEMPORARY FILES' 'Scan temp folders and legacy caches. Shader caches and protected folders require extra review.' 'REVIEW WINDOWS CACHE' { Show-DiskCleanup } $script:PageClr.CLEANUP 'trash'))
+    $f.Controls.Add((New-Section 'STORAGE SAFETY' $script:PageClr.CLEANUP))
+    $n = New-Card 900 105 'full' $script:PageClr.CLEANUP
+    $n.Controls.Add((New-Lbl 'NO AUTOMATIC DELETION' 22 14 750 26 $script:Fnt.Row $script:Clr.Text))
+    $n.Controls.Add((New-Lbl 'Scan before cleaning. Deleting caches does not guarantee better FPS; shader cache deletion can cause stutter.' 22 48 830 42 $script:Fnt.Small $script:Clr.Dim))
+    $f.Controls.Add($n)
+    return $p
+}
 function Build-RestoreCenter {
-    $p = New-PageShell 'RESTORE' 'FRENZY RESTORE CENTER' 'Recovery, saved state and audit history.' 112
+    $p = New-PageShell 'RESTORE' 'RESTORE' 'Recovery, saved state and audit history.' 112
     $f = $script:Pages['RESTORE'].Flow
     $f.Controls.Add((New-Section 'RECOVERY OPTIONS' $script:PageClr.RESTORE))
     $f.Controls.Add((New-HubCard 'SYSTEM RESTORE' 'Open Windows System Restore to inspect existing restore points.' 'OPEN SYSTEM RESTORE' { Start-Process rstrui.exe } $script:PageClr.RESTORE 'undo'))
@@ -3432,7 +3853,6 @@ function Build-RestoreCenter {
 function Show-Page([string]$Key) {
     foreach ($k in $script:Pages.Keys) { $script:Pages[$k].Panel.Visible = ($k -eq $Key) }
     $script:CurrentPage = $Key
-    if ($script:ActivePageNotice) { $script:ActivePageNotice.Text = 'OPEN  /  ' + $Key }
     if ($script:Pages[$Key].Flow) { Fit-Flow $script:Pages[$Key].Flow }
     foreach ($k in $script:NavButtons.Keys) { $script:NavButtons[$k].Select($k -eq $Key) }
     Update-Footer $Key
@@ -3442,6 +3862,61 @@ function Show-Page([string]$Key) {
 function Add-Page($r) {
     $p = @($r | Where-Object { $_ -is [Windows.Forms.Panel] }) | Select-Object -Last 1
     if ($p) { $script:PagesHost.Controls.Add($p) }
+}
+
+
+
+# ---------- Additional Optimization Pages ----------
+function Build-Services {
+    $p = New-PageShell 'SERVICES' 'SERVICES' 'Optimize background Windows services for lower latency and better system efficiency.'
+    $f = $script:Pages['SERVICES'].Flow; $ac = [Fz.Theme]::Accent
+    foreach ($it in (Get-PageTweaks 'GENERAL')) {
+        if ($it.Group -match 'DIAGNOSTICS|BACKGROUND' -or $it.T.Kind -eq 'Svc') {
+            [void](Add-TweakRow $f $it.T 'SERVICES' 'BACKGROUND SERVICES')
+        }
+    }
+    return $p
+}
+
+function Build-Amd {
+    $p = New-PageShell 'AMD' 'AMD' 'Radeon software optimizations, ULPS power management and display latency.'
+    $f = $script:Pages['AMD'].Flow; $ac = [Fz.Theme]::Accent
+    foreach ($it in (Get-PageTweaks 'GPU')) {
+        [void](Add-TweakRow $f $it.T 'AMD' 'RADEON OPTIMIZATIONS')
+    }
+    return $p
+}
+
+function Build-Intel {
+    $p = New-PageShell 'INTEL' 'INTEL' 'Integrated GPU performance, power throttling and dynamic frequency tuning.'
+    $f = $script:Pages['INTEL'].Flow; $ac = [Fz.Theme]::Accent
+    foreach ($it in (Get-PageTweaks 'GPU')) {
+        if ($it.T.Name -match 'Power|Plan|PCIe|GPU') {
+            [void](Add-TweakRow $f $it.T 'INTEL' 'INTEL POWER & GRAPHICS')
+        }
+    }
+    return $p
+}
+
+function Build-Settings {
+    $p = New-PageShell 'SETTINGS' 'SETTINGS' 'Application preferences, safety configurations and rollback controls.'
+    $f = $script:Pages['SETTINGS'].Flow; $ac = [Fz.Theme]::Accent
+    $sc = New-Card 840 180 'full' $ac
+    $sc.Controls.Add((New-Lbl 'APPLICATION PREFERENCES' 24 16 300 22 $script:Fnt.Mid $script:Clr.Text))
+    
+    $chkG = New-Object Fz.FzToggle; $chkG.OnColor = $ac; $chkG.Location = New-Object Drawing.Point(24, 52); $chkG.Checked = $script:Guard
+    $chkG.Add_CheckedChanged({ $script:Guard = $this.Checked; if ($script:DevLbl) { $script:DevLbl.Text = ('{0}   Guard {1}' -f $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $(if ($script:Guard) { 'ON' } else { 'OFF' })) } })
+    $sc.Controls.Add($chkG)
+    $sc.Controls.Add((New-Lbl 'Laptop Protection Guard (prevents aggressive power tweaks on battery)' 78 54 600 20 $script:Fnt.Norm $script:Clr.Text))
+
+    $chkDry = New-Object Fz.FzToggle; $chkDry.OnColor = $ac; $chkDry.Location = New-Object Drawing.Point(24, 88); $chkDry.Checked = $false
+    $sc.Controls.Add($chkDry)
+    $sc.Controls.Add((New-Lbl 'Dry Run Mode (simulate tweak execution without modifying registry)' 78 90 600 20 $script:Fnt.Norm $script:Clr.Text))
+
+    $bCheckup = New-Btn 'Run System Checkup' 220 36 $false $ac 'shield'; $bCheckup.Location = New-Object Drawing.Point(24, 126); $bCheckup.Add_Click({ Show-Checkup })
+    $sc.Controls.Add($bCheckup)
+    $f.Controls.Add($sc)
+    return $p
 }
 
 # ---------- Main window ----------
@@ -3461,11 +3936,8 @@ $fm.StartPosition = 'CenterScreen'; $fm.BackColor = $script:Clr.Bg; $fm.ForeColo
 $topBar = New-Object Windows.Forms.Panel; $topBar.Dock = 'Top'; $topBar.Height = 58; $topBar.BackColor = $script:Clr.Side
 $tbLogo = New-LogoBox 34 $script:Clr.Side; $tbLogo.Location = New-Object Drawing.Point(16, 12); $topBar.Controls.Add($tbLogo)
 $topBar.Controls.Add((New-Wordmark 60 17 21 2.5 $script:Clr.Side))
-$brandSub = New-Lbl 'PREMIUM PERFORMANCE SUITE' 62 40 260 12 $script:Fnt.Tiny $script:Clr.Dim
+$brandSub = New-Lbl 'OPTIMIZE  â€¢  BOOST  â€¢  DOMINATE' 62 38 260 12 $script:Fnt.Tiny $script:Clr.Dim
 $topBar.Controls.Add($brandSub)
-# Compact status breadcrumb, integrated into the header without a popup.
-$script:ActivePageNotice = New-Lbl 'OPEN  /  HOME' 348 21 220 20 $script:Fnt.MonoB ([Drawing.Color]::FromArgb(160,125,255))
-$topBar.Controls.Add($script:ActivePageNotice)
 try { $ib = New-Object Drawing.Bitmap(64, 64); $ig = [Drawing.Graphics]::FromImage($ib); $ig.SmoothingMode = 'AntiAlias'; Draw-FrenzyLogo $ig 2 2 60; $fm.Icon = [Drawing.Icon]::FromHandle($ib.GetHicon()); $ig.Dispose() } catch {}
 $topRight = New-Object Windows.Forms.FlowLayoutPanel; $topRight.Dock = 'Right'; $topRight.Width = 760; $topRight.FlowDirection = 'RightToLeft'; $topRight.BackColor = $script:Clr.Side
 $topRight.Padding = New-Object Windows.Forms.Padding(0, 13, 14, 0)
@@ -3479,116 +3951,60 @@ $lDry = New-Lbl 'DRY RUN (PREVIEW)' 0 0 140 22 $script:Fnt.Tiny $script:Clr.Dim;
 $topRight.Controls.AddRange(@($script:UpdBtn, $adm, $lRP, $script:chkRP, $lDry, $script:chkDry)); $topBar.Controls.Add($topRight)
 $script:UpdBtn.Text = $script:UpdateState
 
-# sidebar
-$side = New-Object Windows.Forms.Panel; $side.Dock = 'Left'; $side.Width = 244; $side.BackColor = $script:Clr.Side
-$nav = New-Object Windows.Forms.FlowLayoutPanel; $nav.Dock = 'Fill'; $nav.FlowDirection = 'TopDown'; $nav.WrapContents = $false; $nav.BackColor = $script:Clr.Side; $nav.Padding = New-Object Windows.Forms.Padding(0, 12, 0, 0)
-function Add-NavLabel([string]$t) { $l = New-Lbl $t 0 0 244 24 $script:Fnt.Tiny $script:Clr.Dim; $l.Padding = New-Object Windows.Forms.Padding(24, 8, 0, 0); $l.BackColor = $script:Clr.Side; $l.Margin = New-Object Windows.Forms.Padding(0, 6, 0, 0); $nav.Controls.Add($l) }
-function Add-NavBtn([string]$Key, [string]$Text, [string]$Badge) {
-    $b = New-Object Fz.FzNav; $b.Text = $Text; $b.Icon = $script:PageIcon[$Key]; $b.Accent = $script:PageClr[$Key]; $b.Badge = $Badge; $b.Width = 244; $b.Margin = New-Object Windows.Forms.Padding(0)
+# sidebar (matching ui-reference.png)
+$side = New-Object Windows.Forms.Panel; $side.Dock = 'Left'; $side.Width = 210; $side.BackColor = $script:Clr.Side
+$nav = New-Object Windows.Forms.FlowLayoutPanel; $nav.Dock = 'Fill'; $nav.FlowDirection = 'TopDown'; $nav.WrapContents = $false; $nav.BackColor = $script:Clr.Side; $nav.Padding = New-Object Windows.Forms.Padding(0, 10, 0, 0)
+function Add-NavBtn([string]$Key, [string]$Text, [string]$Badge = '') {
+    $b = New-Object Fz.FzNav; $b.Text = $Text; $b.Icon = $script:PageIcon[$Key]; $b.Accent = [Fz.Theme]::Accent; $b.Badge = $Badge; $b.Width = 210; $b.Margin = New-Object Windows.Forms.Padding(0)
     $b.Tag = $Key; $b.Add_Click({ Show-Page $this.Tag }); $nav.Controls.Add($b); $script:NavButtons[$Key] = $b
 }
-Add-NavLabel 'CORE'
-Add-NavBtn 'HOME' 'Dashboard' ''
-Add-NavBtn 'GAMES' 'Fortnite' ([string](Get-PageTweaks 'GAMES').Count)
-Add-NavLabel 'TWEAKS'
+Add-NavBtn 'HOME' 'Dashboard'
 Add-NavBtn 'GENERAL' 'General' ([string](Get-PageTweaks 'GENERAL').Count)
-Add-NavBtn 'DEBLOAT' 'Debloat' ''
-Add-NavBtn 'RESTORE' 'Restore Center' ''
-Add-NavBtn 'DIAGNOSTICS' 'Diagnostics' ''
 Add-NavBtn 'INPUT' 'Input Delay' ([string](Get-PageTweaks 'INPUT').Count)
-Add-NavBtn 'GPU' 'GPU & CPU' ([string](Get-PageTweaks 'GPU').Count)
 Add-NavBtn 'NETWORK' 'Network' ([string](Get-PageTweaks 'NETWORK').Count)
-$sideBot = New-Object Windows.Forms.Panel; $sideBot.Dock = 'Bottom'; $sideBot.Height = 136; $sideBot.BackColor = $script:Clr.Side
-$dev = New-Object Fz.FzCard; $dev.Location = New-Object Drawing.Point(14, 6); $dev.Size = New-Object Drawing.Size(216, 40); $dev.Icon = 'chip'; $dev.Accent = $script:PageClr.GPU; $dev.Radius = 10; $dev.Hover = $false
-$script:DevLbl = New-Lbl ('{0}   Guard {1}' -f $(if ($script:Sys.IsLaptop) { 'LAPTOP' } else { 'DESKTOP' }), $(if ($script:Guard) { 'ON' } else { 'OFF' })) 44 11 170 18 $script:Fnt.Tiny $script:Clr.Text
-$dev.Controls.Add($script:DevLbl); $sideBot.Controls.Add($dev)
-$discord = New-Btn 'DISCORD: frenzyinzane_47577' 216 38 $true (New-Rgb 88 101 242) 'arrow'
-$discord.Location = New-Object Drawing.Point(14, 54)
-$discord.Add_Click({
-    try { [Windows.Forms.Clipboard]::SetText('frenzyinzane_47577'); Log 'Discord username copied to clipboard'; Start-Process 'https://discord.com/app' }
-    catch { Log "Discord contact action failed: $($_.Exception.Message)" 'WARN' }
-})
-$sideBot.Controls.Add($discord)
-$sideBot.Controls.Add((New-Lbl "v $($script:AppVersion)" 14 100 216 18 $script:Fnt.Tiny $script:Clr.Dim))
-$side.Controls.Add($nav); $side.Controls.Add($sideBot); $nav.BringToFront()
+Add-NavBtn 'DEBLOAT' 'Debloat' ''
+Add-NavBtn 'SERVICES' 'Services' ''
+Add-NavBtn 'GPU' 'NVIDIA' ([string](Get-PageTweaks 'GPU').Count)
+Add-NavBtn 'AMD' 'AMD' ''
+Add-NavBtn 'INTEL' 'Intel' ''
+Add-NavBtn 'CLEANUP' 'Cleanup' ''
+Add-NavBtn 'GAMES' 'NVIDIA Profile Inspector' ''
+Add-NavBtn 'SETTINGS' 'Settings' ''
 
+$sideBot = New-Object Windows.Forms.Panel; $sideBot.Dock = 'Bottom'; $sideBot.Height = 74; $sideBot.BackColor = $script:Clr.Side; $sideBot.Padding = New-Object Windows.Forms.Padding(18, 10, 12, 10)
+$botLogo = New-LogoBox 22 $script:Clr.Side; $botLogo.Location = New-Object Drawing.Point(18, 14); $sideBot.Controls.Add($botLogo)
+$sideBot.Controls.Add((New-Lbl 'FRENZY TWEAKS' 46 12 150 16 $script:Fnt.Tiny ($script:Clr.Text)))
+$sideBot.Controls.Add((New-Lbl 'Better Performance. Smoother Gameplay.' 18 36 185 30 $script:Fnt.Tiny $script:Clr.Dim))
+$side.Controls.Add($nav); $side.Controls.Add($sideBot); $nav.BringToFront()
 # content + log
 $content = New-Object Windows.Forms.Panel; $content.Dock = 'Fill'; $content.BackColor = $script:Clr.Bg
 $script:PagesHost = New-Object Windows.Forms.Panel; $script:PagesHost.Dock = 'Fill'; $script:PagesHost.BackColor = $script:Clr.Bg
 $logPanel = New-Object Windows.Forms.Panel; $logPanel.Dock = 'Bottom'; $logPanel.Height = 150; $logPanel.BackColor = $script:Clr.Side
 $script:Progress = New-Object Fz.FzProgress; $script:Progress.Dock = 'Top'; $script:Progress.Height = 5; $script:Progress.Accent = $script:Clr.Accent
-$logHead = New-Object Windows.Forms.Panel; $logHead.Dock = 'Top'; $logHead.Height = 30; $logHead.BackColor = $script:Clr.Side
-$logTitle = New-Lbl "$BAR ACTIVITY LOG" 18 6 180 20 $script:Fnt.Tiny $script:Clr.Accent
-$script:ActivityNotice = New-Lbl 'READY  |  Live operation feedback' 212 6 700 20 $script:Fnt.Tiny $script:Clr.Dim
-$script:ActivityNotice.AutoEllipsis = $true
-$logHead.Controls.Add($logTitle); $logHead.Controls.Add($script:ActivityNotice)
-$logHead.Add_Resize({ $script:ActivityNotice.Width = [math]::Max(150, $this.Width - 230) })
+$logHead = New-Lbl "$BAR ACTIVITY LOG" 0 0 300 24 $script:Fnt.Tiny $script:Clr.Accent; $logHead.Dock = 'Top'; $logHead.Height = 24; $logHead.Padding = New-Object Windows.Forms.Padding(20, 6, 0, 0); $logHead.BackColor = $script:Clr.Side
 $script:LogBox = New-Object Windows.Forms.TextBox; $script:LogBox.Multiline = $true; $script:LogBox.ReadOnly = $true; $script:LogBox.ScrollBars = 'Vertical'; $script:LogBox.Dock = 'Fill'
 $script:LogBox.BackColor = (New-Rgb 6 9 17); $script:LogBox.ForeColor = (New-Rgb 150 190 255); $script:LogBox.Font = $script:Fnt.Mono; $script:LogBox.BorderStyle = 'None'
 Fix-Scroll $script:LogBox
 $logPanel.Controls.Add($script:LogBox); $logPanel.Controls.Add($logHead); $logPanel.Controls.Add($script:Progress); $script:LogBox.BringToFront()
 $content.Controls.Add($script:PagesHost); $content.Controls.Add($logPanel); $script:PagesHost.BringToFront()
 $fm.Controls.Add($content); $fm.Controls.Add($side); $fm.Controls.Add($topBar); $content.BringToFront()
-$script:RestartNotice = New-Object Windows.Forms.Label
-$script:RestartNotice.Dock = 'Top'; $script:RestartNotice.Height = 28
-$script:RestartNotice.BackColor = [Drawing.Color]::FromArgb(95,63,20)
-$script:RestartNotice.ForeColor = [Drawing.Color]::FromArgb(255,226,161)
-$script:RestartNotice.Font = $script:Fnt.SmallB; $script:RestartNotice.TextAlign = 'MiddleCenter'
-$fm.Controls.Add($script:RestartNotice)
-$script:RestartNotice.BringToFront()
-Update-FrenzyRestartNotice
-$script:Toast = New-Object Windows.Forms.Label
-$script:Toast.Size = New-Object Drawing.Size(435, 48)
-$script:Toast.BackColor = [Drawing.Color]::FromArgb(48, 33, 65)
-$script:Toast.ForeColor = [Drawing.Color]::FromArgb(240, 244, 255)
-$script:Toast.Font = $script:Fnt.SmallB
-$script:Toast.TextAlign = 'MiddleCenter'
-$script:Toast.Visible = $false
-$fm.Controls.Add($script:Toast)
-$script:Toast.BringToFront()
-$script:ToastClock = [Diagnostics.Stopwatch]::StartNew()
-$script:ToastUntil = [long]0
-$script:ToastTimer = New-Object Windows.Forms.Timer
-$script:ToastTimer.Interval = 35
-$script:ToastTimer.Add_Tick({
-    try {
-        if (-not $script:Form -or $script:Form.IsDisposed -or -not $script:Toast -or $script:Toast.IsDisposed) { $script:ToastTimer.Stop(); return }
-        if ($script:ToastClock.ElapsedMilliseconds -gt $script:ToastUntil) { $script:Toast.Visible = $false; $script:ToastTimer.Stop(); return }
-        $dest = [math]::Max(0, $script:Form.ClientSize.Width - $script:Toast.Width - 22)
-        $current = $script:Toast.Left
-        $next = [math]::Max($dest, $current - 30)
-        $script:Toast.Left = [int]$next
-        $script:Toast.Top = 92
-    } catch { try { $script:ToastTimer.Stop() } catch {} }
-})
-function Show-FrenzyToast([string]$message, [string]$level = 'INFO') {
-    if (-not $script:Toast -or $script:Toast.IsDisposed -or -not $script:Form -or $script:Form.IsDisposed) { return }
-    $script:Toast.Text = "$level  |  $message"
-    $script:Toast.BackColor = switch ($level) {
-        'ERROR' { [Drawing.Color]::FromArgb(100, 34, 46) }
-        'WARN' { [Drawing.Color]::FromArgb(100, 71, 27) }
-        'SUCCESS' { [Drawing.Color]::FromArgb(26, 88, 66) }
-        default { [Drawing.Color]::FromArgb(55, 35, 85) }
-    }
-    $script:Toast.Location = New-Object Drawing.Point($script:Form.ClientSize.Width, 92)
-    $script:ToastUntil = $script:ToastClock.ElapsedMilliseconds + 2800
-    $script:Toast.Visible = $true
-    $script:Toast.BringToFront()
-    $script:ToastTimer.Start()
-}
-
 Pump
 
+Update-SplashStep 80 'CYBER DASHBOARD' 'Compiling navigation, page hosts, and telemetry monitors...'
 # pages (the splash keeps animating because we pump between builds)
 Add-Page (Build-Home); Pump
 Add-Page (Build-TweakPage 'GENERAL' 'GENERAL' 'Baseline Windows privacy, notifications and cleanup. Flip the switches you want, then APPLY CHANGES.'); Pump
 Add-Page (Build-Debloat); Pump
+Add-Page (Build-CleanupCenter); Pump
 Add-Page (Build-RestoreCenter); Pump
-Add-Page (Build-V4Diagnostics); Pump
-Add-Page (Build-InputDiagnostics); Pump
+Add-Page (Build-TweakPage 'INPUT' 'INPUT DELAY' 'Mouse, keyboard, overlay and background-service tweaks that keep your inputs responsive.'); Pump
 Add-Page (Build-Gpu); Pump
 Add-Page (Build-Network); Pump
 Add-Page (Build-Games); Pump
+Add-Page (Build-Services); Pump
+Add-Page (Build-Amd); Pump
+Add-Page (Build-Intel); Pump
+Add-Page (Build-Settings); Pump
 
 $script:Timer = New-Object Windows.Forms.Timer; $script:Timer.Interval = 5000
 $script:TelemetryUpdating = $false
@@ -3598,61 +4014,38 @@ $script:Timer.Add_Tick({
     try { Update-Telemetry } catch { Log ('Telemetry update failed: ' + $_.Exception.Message) 'WARN' }
     finally { $script:TelemetryUpdating = $false }
 })
-$fm.Add_FormClosing({
-    try { if ($script:Timer) { $script:Timer.Stop() } } catch {}
-    try { if ($script:ToastTimer) { $script:ToastTimer.Stop() } } catch {}
-    try { if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop() } } catch {}
-})
+$fm.Add_FormClosing({ $script:Timer.Stop() })
 Log ("Loaded {0} tweaks. {1} detected ({2}). Laptop Guard: {3}." -f $script:Tweaks.Count, $(if ($script:Sys.IsLaptop) { 'Laptop' } else { 'Desktop' }), $script:Sys.Model, $(if ($script:Guard) { 'ON' } else { 'OFF' }))
 Log "State/backup: $script:StateFile"
 if (-not $script:HasNvidia) { Log 'No NVIDIA GPU detected - NVIDIA profile and GPU sensors are unavailable.' 'WARN' }
 
-# Prepare the main UI while the loader is visible, but do not show the main window until the loader has finished.
+Update-SplashStep 95 'ENVIRONMENT CALIBRATION' 'Scanning active tweak states & hardware sensors...'
+# everything that used to run after the window opened now runs behind the splash
 Refresh-AllRows; Pump
 $script:LastRP = Get-LastRestorePoint
 Update-GameCard; Update-Home; Show-Page 'HOME'; Pump
 
-$fm.Add_Shown({
-        try { [Fz.Native]::DarkTitle($this.Handle) } catch {}
-        $this.Activate(); [Fz.Native]::Foreground($this.Handle)
-        # For our built-in splash, wait until its 10-second animation finishes.
-        # A splash created by an external GitHub bootstrap keeps its own lifecycle.
-        if ($global:FrenzySplashForm) {
-            if ($global:FrenzySplashStarted) {
-                $global:FrenzySplashReady = $true
-                # The pre-launch wait normally removes the splash before the main form is shown.
-                try { $this.BeginInvoke([Action]{ if ($global:FrenzySplashForm) { $global:FrenzySplashForm.Activate() } }) | Out-Null } catch {}
-            } else {
-                try {
-                    if ($global:FrenzySplash) { $global:FrenzySplash.Closing = $true }
-                    if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop() }
-                    $global:FrenzySplashForm.TopMost = $false
-                    $global:FrenzySplashForm.Opacity = 0
-                    $global:FrenzySplashForm.Hide()
-                    $global:FrenzySplashForm.Close()
-                } catch { try { $global:FrenzySplashForm.Hide() } catch {} }
-            }
-        }
-        $script:Timer.Start()
-    })
 
-# External GitHub bootstraps may create their own splash. Pump WinForms events while it finishes,
-# then dispose only that splash before showing the actual application window.
-if ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed) {
-    $waitStart = if ($global:FrenzySplashStarted -is [DateTime]) { $global:FrenzySplashStarted } else { [DateTime]::UtcNow }
-    while ($global:FrenzySplashForm -and -not $global:FrenzySplashForm.IsDisposed -and
-           (([DateTime]::UtcNow - $waitStart).TotalSeconds -lt 10)) {
-        [Windows.Forms.Application]::DoEvents()
-        Start-Sleep -Milliseconds 25
-    }
-    if ($global:FrenzySplashTimer) { try { $global:FrenzySplashTimer.Stop() } catch {} }
-    $lastSplash = $global:FrenzySplashForm
-    $global:FrenzySplashForm = $null
-    try { $lastSplash.TopMost = $false; $lastSplash.Hide(); $lastSplash.Dispose() } catch {}
-}
-try { [void]$fm.ShowDialog() }
-finally {
-    try { if ($script:Timer) { $script:Timer.Stop(); $script:Timer.Dispose() } } catch {}
-    try { if ($script:ToastTimer) { $script:ToastTimer.Stop(); $script:ToastTimer.Dispose() } } catch {}
-    try { if ($global:FrenzySplashTimer) { $global:FrenzySplashTimer.Stop(); $global:FrenzySplashTimer.Dispose(); $global:FrenzySplashTimer = $null } } catch {}
-}
+
+Update-SplashStep 100 'OPTIMIZER READY' 'System calibrated. Welcome to Frenzy Tweaks!'
+Start-Sleep -Milliseconds 250
+Close-FrenzySplash
+
+try {
+    $ib = New-Object Drawing.Bitmap(64, 64)
+    $ig = [Drawing.Graphics]::FromImage($ib)
+    $ig.SmoothingMode = 'AntiAlias'
+    Draw-FrenzyLogo $ig 2 2 60
+    $hIcon = $ib.GetHicon()
+    $fm.Icon = [Drawing.Icon]::FromHandle($hIcon).Clone()
+    [void][Fz.Native]::DestroyIcon($hIcon)
+    $ig.Dispose(); $ib.Dispose()
+} catch {}
+
+$fm.Add_Shown({
+    try { [Fz.Native]::DarkTitle($this.Handle) } catch {}
+    $this.Activate()
+    [Fz.Native]::Foreground($this.Handle)
+    $script:Timer.Start()
+})
+[void]$fm.ShowDialog()
